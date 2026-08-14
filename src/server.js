@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Agent } from "./agent/agent.js";
 import { OpenAICompatibleProvider } from "./agent/provider.js";
+import { resolveModelConfig } from "./config.js";
 import {
   addMessage,
   createConversation,
@@ -15,11 +16,8 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const publicDir = path.join(root, "public");
 const port = Number(process.env.PORT || 3000);
-const provider = new OpenAICompatibleProvider({
-  apiKey: process.env.OPENAI_API_KEY || "",
-  baseUrl: process.env.OPENAI_BASE_URL || "https://api.openai.com/v1",
-  model: process.env.OPENAI_MODEL || "gpt-4.1-mini",
-});
+const modelConfig = resolveModelConfig();
+const provider = new OpenAICompatibleProvider(modelConfig);
 const agent = new Agent({
   provider,
   systemPrompt: process.env.SYSTEM_PROMPT || "你是常青 Agent。回答准确、简洁；需要时主动调用工具。",
@@ -49,7 +47,11 @@ function sendEvent(response, event) {
 
 async function api(request, response, url) {
   if (request.method === "GET" && url.pathname === "/api/status") {
-    return json(response, 200, { mode: provider.isDemo ? "demo" : "model", model: provider.model });
+    return json(response, 200, {
+      mode: provider.isDemo ? "demo" : "model",
+      model: provider.model,
+      provider: modelConfig.providerName,
+    });
   }
   if (request.method === "GET" && url.pathname === "/api/conversations") {
     return json(response, 200, await listConversations());
@@ -120,5 +122,5 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(port, "127.0.0.1", () => {
   console.log(`Changqing Agent: http://127.0.0.1:${port}`);
-  console.log(`Mode: ${provider.isDemo ? "demo" : `${provider.model}`}`);
+  console.log(`Mode: ${provider.isDemo ? "demo" : `${modelConfig.providerName} / ${provider.model}`}`);
 });

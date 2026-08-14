@@ -3,7 +3,7 @@ function demoReply(messages) {
   const input = last?.content?.trim() || "你好";
   return {
     role: "assistant",
-    content: `演示模式已收到：${input}\n\n当前网页、会话存储和 Agent 循环都已正常工作。配置 OPENAI_API_KEY 后，我会切换到真实模型。`,
+    content: `演示模式已收到：${input}\n\n当前网页、会话存储和 Agent 循环都已正常工作。配置 DASHSCOPE_API_KEY 或 OPENAI_API_KEY 后，我会切换到真实模型。`,
   };
 }
 

@@ -12,23 +12,41 @@ npm start
 
 浏览器打开 <http://127.0.0.1:3000>。未配置模型时会进入演示模式，网页、会话和完整请求链路仍可使用。
 
-## 接入模型
+## 接入千问
 
-复制环境变量模板，再填写兼容 OpenAI Chat Completions 协议的服务：
+程序会自动读取本机的 `DASHSCOPE_API_KEY`，默认通过阿里云百炼北京地域的 OpenAI 兼容接口调用 `qwen-plus`。如果系统环境变量已经配置好，直接运行即可，不需要把密钥复制到项目中：
+
+```powershell
+npm start
+```
+
+可以运行下面的命令检查模型连通性和工具调用链；它不会输出 API Key：
+
+```powershell
+npm run verify:model
+```
+
+如需更换千问模型，可设置：
+
+```dotenv
+QWEN_MODEL=qwen-plus
+```
+
+也可以复制环境变量模板，在项目级单独配置：
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-至少填写：
+千问相关配置为：
 
 ```dotenv
-OPENAI_API_KEY=你的密钥
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_MODEL=你要使用的模型名称
+DASHSCOPE_API_KEY=你的百炼密钥
+DASHSCOPE_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+QWEN_MODEL=qwen-plus
 ```
 
-修改配置后重启 `npm start`。
+程序仍支持 `OPENAI_API_KEY`、`OPENAI_BASE_URL` 和 `OPENAI_MODEL`，并且显式的 OpenAI 配置优先级高于千问配置。修改配置后需要重启 `npm start`。
 
 ## 项目结构
 

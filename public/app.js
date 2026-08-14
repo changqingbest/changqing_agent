@@ -203,7 +203,7 @@ async function boot() {
   try {
     const [status] = await Promise.all([request("/api/status"), refreshList()]);
     $("#runtime-dot").classList.add("online");
-    $("#runtime-label").textContent = status.mode === "demo" ? "演示模式" : "模型已连接";
+    $("#runtime-label").textContent = status.mode === "demo" ? "演示模式" : status.provider;
     $("#model-label").textContent = status.mode === "demo" ? "配置 API Key 以启用模型" : status.model;
     if (state.conversations[0]) await selectConversation(state.conversations[0].id);
     else renderMessages(null);
