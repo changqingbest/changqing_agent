@@ -1,5 +1,9 @@
 .env
 data/*.json
 !data/.gitkeep
-node_modules/
-npm-debug.log*
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
