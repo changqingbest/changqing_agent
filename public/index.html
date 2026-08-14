@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="dark" />
+    <title>Changqing Agent</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <header class="brand-row">
+          <div class="brand-mark" aria-hidden="true"><span></span><span></span></div>
+          <div class="brand-name">CHANGQING</div>
+          <button class="icon-button mobile-only" id="close-sidebar" aria-label="关闭任务栏">×</button>
+        </header>
+
+        <button class="new-task" id="new-task">
+          <span class="new-task-icon">＋</span>
+          <span>新建任务</span>
+          <kbd>Ctrl K</kbd>
+        </button>
+
+        <div class="sidebar-label">任务记录</div>
+        <nav class="task-list" id="task-list" aria-label="任务记录"></nav>
+
+        <footer class="sidebar-footer">
+          <div class="runtime-dot" id="runtime-dot"></div>
+          <div>
+            <strong id="runtime-label">正在连接</strong>
+            <span id="model-label">Agent runtime</span>
+          </div>
+        </footer>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <button class="icon-button mobile-only" id="open-sidebar" aria-label="打开任务栏">☰</button>
+          <div class="topbar-title" id="topbar-title">新任务</div>
+          <div class="topbar-actions">
+            <span class="local-badge"><i></i> LOCAL</span>
+            <button class="icon-button" id="delete-task" aria-label="删除当前任务" title="删除任务">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6" /></svg>
+            </button>
+          </div>
+        </header>
+
+        <section class="conversation" id="conversation">
+          <div class="welcome" id="welcome">
+            <div class="welcome-glyph"><span></span><span></span><span></span></div>
+            <p class="eyebrow">YOUR AGENT, YOUR RULES</p>
+            <h1>从一个问题开始。</h1>
+            <p class="welcome-copy">这是你的本地 Agent 工作台。模型负责推理，工具负责行动，框架由你掌控。</p>
+            <div class="suggestions">
+              <button data-prompt="介绍一下你现在具备的能力">介绍你的能力 <span>↗</span></button>
+              <button data-prompt="现在几点了？请调用工具查询">测试工具调用 <span>↗</span></button>
+            </div>
+          </div>
+          <div class="message-stream" id="message-stream"></div>
+        </section>
+
+        <div class="composer-wrap">
+          <div class="activity" id="activity" hidden><span></span><span id="activity-text">正在思考</span></div>
+          <form class="composer" id="composer">
+            <textarea id="message-input" rows="1" maxlength="12000" placeholder="给 Agent 发送消息…" aria-label="消息内容"></textarea>
+            <div class="composer-bottom">
+              <div class="composer-hint"><kbd>Enter</kbd> 发送 · <kbd>Shift Enter</kbd> 换行</div>
+              <button class="send-button" id="send-button" type="submit" aria-label="发送消息">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m0 0-6 6m6-6 6 6" /></svg>
+              </button>
+            </div>
+          </form>
+          <p class="disclaimer">Agent 可能会犯错，请检查重要信息。</p>
+        </div>
+      </main>
+    </div>
+    <div class="sidebar-scrim" id="sidebar-scrim"></div>
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
