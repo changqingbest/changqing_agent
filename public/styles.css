@@ -142,6 +142,29 @@ button { color: inherit; }
 .message-content pre code { padding: 0; border: 0; color: #c9cbc5; background: transparent; }
 
 .composer-wrap { width: min(790px, calc(100% - 38px)); margin: 0 auto; padding-bottom: 10px; }
+.template-panel { max-height: min(520px, 62vh); margin-bottom: 10px; padding: 15px; overflow: hidden; border: 1px solid var(--line-bright); border-radius: 10px; background: #181b18; box-shadow: 0 24px 70px rgba(0,0,0,.48); animation: rise .18s ease both; }
+.template-panel[hidden] { display: none; }
+.template-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.template-panel-head strong, .template-panel-head span { display: block; }
+.template-panel-head strong { font-size: 14px; font-weight: 600; }
+.template-panel-head span { margin-top: 3px; color: var(--faint); font-size: 10px; }
+.template-close { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 5px; color: var(--muted); background: transparent; font-size: 20px; line-height: 1; cursor: pointer; }
+.template-close:hover { color: var(--ink); background: var(--panel-raised); }
+.template-search { width: 100%; height: 36px; margin-top: 12px; padding: 0 11px; border: 1px solid var(--line); border-radius: 6px; outline: 0; color: var(--ink); background: #121412; font: 400 12px "Noto Sans SC", sans-serif; }
+.template-search:focus { border-color: #5c6257; }
+.template-search::placeholder { color: var(--faint); }
+.template-categories { display: flex; gap: 6px; margin: 11px 0; overflow-x: auto; scrollbar-width: none; }
+.template-categories::-webkit-scrollbar { display: none; }
+.template-categories button { flex: 0 0 auto; height: 27px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: transparent; font-size: 10px; cursor: pointer; }
+.template-categories button:hover { color: var(--ink); border-color: var(--line-bright); }
+.template-categories button.active { color: #161816; border-color: var(--acid); background: var(--acid); }
+.template-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; max-height: min(310px, 38vh); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #343833 transparent; }
+.template-card { min-width: 0; min-height: 70px; padding: 11px; border: 1px solid var(--line); border-radius: 7px; color: inherit; background: var(--panel); text-align: left; cursor: pointer; transition: border-color .15s, background .15s, transform .15s; }
+.template-card:hover { border-color: #53584f; background: #202320; transform: translateY(-1px); }
+.template-card strong, .template-card span { display: block; }
+.template-card strong { color: #d4d6cf; font-size: 12px; font-weight: 500; }
+.template-card span { margin-top: 6px; overflow: hidden; color: var(--faint); font-size: 10px; line-height: 1.5; text-overflow: ellipsis; white-space: nowrap; }
+.template-empty { grid-column: 1 / -1; padding: 30px; color: var(--faint); font-size: 12px; text-align: center; }
 .activity { align-items: center; gap: 8px; height: 26px; color: var(--muted); font: 400 10px "IBM Plex Mono", monospace; }
 .activity:not([hidden]) { display: flex; }
 .activity > span:first-child { width: 6px; height: 6px; border-radius: 50%; background: var(--acid); animation: pulse 1s infinite; }
@@ -150,6 +173,9 @@ button { color: inherit; }
 .composer textarea { display: block; width: 100%; max-height: 180px; padding: 0; resize: none; border: 0; outline: 0; color: var(--ink); background: transparent; font-size: 14px; line-height: 1.65; }
 .composer textarea::placeholder { color: #70736d; }
 .composer-bottom { display: flex; align-items: end; min-height: 29px; margin-top: 7px; }
+.template-trigger { display: flex; align-items: center; gap: 5px; height: 27px; margin-right: 11px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); background: transparent; font-size: 10px; cursor: pointer; }
+.template-trigger:hover, .template-trigger[aria-expanded="true"] { color: var(--ink); border-color: #53584f; background: var(--panel-raised); }
+.template-trigger span { color: var(--acid); }
 .composer-hint { color: var(--faint); font: 400 9px "IBM Plex Mono", monospace; }
 kbd { font: inherit; }
 .send-button { display: grid; place-items: center; width: 30px; height: 30px; margin-left: auto; padding: 0; border: 0; border-radius: 6px; color: #171917; background: var(--acid); cursor: pointer; transition: filter .15s, transform .15s; }
@@ -176,8 +202,13 @@ kbd { font: inherit; }
   .welcome { margin-top: 9vh; }
   .suggestions { grid-template-columns: 1fr; }
   .composer-wrap { width: calc(100% - 20px); }
+  .template-list { grid-template-columns: 1fr 1fr; }
   .composer-hint { display: none; }
   .message-stream { width: calc(100% - 24px); }
+}
+
+@media (max-width: 480px) {
+  .template-list { grid-template-columns: 1fr; }
 }
 
 @media (prefers-reduced-motion: reduce) {

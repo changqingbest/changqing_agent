@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from app.agent import AgentLoop
 from app.config import PROJECT_ROOT, settings
+from app.prompts import get_prompt_catalog
 from app.providers.openai_compatible import OpenAICompatibleProvider
 from app.ptc import PTCExecutor
 from app.store import ConversationStore
@@ -53,7 +54,7 @@ agent = AgentLoop(
 # 会话保存到项目 data 目录；该 JSON 文件已被 .gitignore 排除。
 store = ConversationStore(PROJECT_ROOT / "data" / "conversations.json")
 # FastAPI 应用对象是 uvicorn 的加载入口 app.server:app。
-app = FastAPI(title="Changqing Agent", version="0.3.0")
+app = FastAPI(title="Changqing Agent", version="0.4.0")
 
 
 # GET /api/status
@@ -72,6 +73,13 @@ async def status() -> dict[str, Any]:
         "search_provider": "tavily" if settings.tavily_api_key else "bing_rss",
         "port": settings.port,
     }
+
+
+# GET /api/prompt-templates
+# 返回项目内置的提示词分类和模板。模板是只读静态内容，不包含密钥或用户会话数据。
+@app.get("/api/prompt-templates")
+async def prompt_templates() -> dict[str, Any]:
+    return get_prompt_catalog()
 
 
 # GET /api/conversations

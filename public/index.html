@@ -65,9 +65,24 @@
 
         <div class="composer-wrap">
           <div class="activity" id="activity" hidden><span></span><span id="activity-text">正在思考</span></div>
+          <section class="template-panel" id="template-panel" aria-label="提示词模板" hidden>
+            <div class="template-panel-head">
+              <div>
+                <strong>提示词模板</strong>
+                <span>选择后可继续编辑，不会自动发送</span>
+              </div>
+              <button class="template-close" id="template-close" type="button" aria-label="关闭模板面板">×</button>
+            </div>
+            <input class="template-search" id="template-search" type="search" placeholder="搜索模板…" aria-label="搜索提示词模板" />
+            <div class="template-categories" id="template-categories" role="tablist" aria-label="模板分类"></div>
+            <div class="template-list" id="template-list"></div>
+          </section>
           <form class="composer" id="composer">
             <textarea id="message-input" rows="1" maxlength="12000" placeholder="给 Agent 发送消息…" aria-label="消息内容"></textarea>
             <div class="composer-bottom">
+              <button class="template-trigger" id="template-trigger" type="button" aria-expanded="false" aria-controls="template-panel">
+                <span aria-hidden="true">✦</span> 模板
+              </button>
               <div class="composer-hint"><kbd>Enter</kbd> 发送 · <kbd>Shift Enter</kbd> 换行</div>
               <button class="send-button" id="send-button" type="submit" aria-label="发送消息">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m0 0-6 6m6-6 6 6" /></svg>

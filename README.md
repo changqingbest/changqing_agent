@@ -30,6 +30,7 @@ python -m scripts.verify_model
 app/
 ├── agent.py                         Agent Loop：模型、工具、结果的循环编排
 ├── config.py                        环境变量与端口配置
+├── prompts.py                       内置提示词分类与模板目录
 ├── server.py                        FastAPI、REST、SSE 和静态网页
 ├── store.py                         JSON 会话存储
 ├── providers/openai_compatible.py   千问/OpenAI 兼容模型适配层
@@ -99,9 +100,16 @@ TAVILY_API_KEY=
 
 网络工具统一设置连接/读取超时。它们仍通过同一个 `ToolRegistry` 暴露给普通 function calling 和 PTC；Agent Loop 会在线程中执行同步工具，避免网络请求阻塞 FastAPI 事件循环。
 
+## 提示词模板
+
+网页输入框左下角的“模板”按钮提供 8 个分类、24 个内置模板，覆盖通用问答、联网调研、编程开发、写作总结、数据分析、效率办公、创意多媒体和部署运维。选择模板只会填入输入框，用户可替换 `【占位内容】` 后再发送。
+
+模板数据由 `GET /api/prompt-templates` 提供；新增模板时编辑 `app/prompts.py` 即可，无需修改前端渲染逻辑。
+
 ## API
 
 - `GET /api/status`：运行模式、模型、PTC 状态和端口
+- `GET /api/prompt-templates`：提示词分类与模板目录
 - `GET/POST /api/conversations`：列出或创建会话
 - `GET/DELETE /api/conversations/{id}`：读取或删除会话
 - `POST /api/chat`：运行 Agent，以 SSE 返回状态、工具和最终答案事件

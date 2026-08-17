@@ -1,5 +1,8 @@
 const $ = (selector) => document.querySelector(selector);
-const state = { conversations: [], activeId: null, busy: false };
+const state = {
+  conversations: [], activeId: null, busy: false,
+  promptCatalog: { categories: [], templates: [] }, activeTemplateCategory: "all",
+};
 
 const elements = {
   taskList: $("#task-list"),
@@ -14,6 +17,11 @@ const elements = {
   activityText: $("#activity-text"),
   sidebar: $("#sidebar"),
   scrim: $("#sidebar-scrim"),
+  templatePanel: $("#template-panel"),
+  templateTrigger: $("#template-trigger"),
+  templateSearch: $("#template-search"),
+  templateCategories: $("#template-categories"),
+  templateList: $("#template-list"),
 };
 
 async function request(url, options) {
@@ -167,6 +175,54 @@ function resizeInput() {
   elements.input.style.height = `${Math.min(elements.input.scrollHeight, 180)}px`;
 }
 
+function renderTemplateCategories() {
+  const categories = [{ id: "all", name: "全部" }, ...state.promptCatalog.categories];
+  elements.templateCategories.innerHTML = categories.map((category) => `
+    <button type="button" role="tab" data-template-category="${escapeHtml(category.id)}"
+      aria-selected="${category.id === state.activeTemplateCategory}"
+      class="${category.id === state.activeTemplateCategory ? "active" : ""}">
+      ${escapeHtml(category.name)}
+    </button>
+  `).join("");
+}
+
+function renderPromptTemplates() {
+  const query = elements.templateSearch.value.trim().toLocaleLowerCase("zh-CN");
+  const visible = state.promptCatalog.templates.filter((template) => {
+    const inCategory = state.activeTemplateCategory === "all" || template.category === state.activeTemplateCategory;
+    const searchable = `${template.title} ${template.description} ${template.prompt}`.toLocaleLowerCase("zh-CN");
+    return inCategory && (!query || searchable.includes(query));
+  });
+  elements.templateList.innerHTML = visible.length ? visible.map((template) => `
+    <button type="button" class="template-card" data-template-id="${escapeHtml(template.id)}">
+      <strong>${escapeHtml(template.title)}</strong>
+      <span>${escapeHtml(template.description)}</span>
+    </button>
+  `).join("") : '<div class="template-empty">没有匹配的模板</div>';
+}
+
+function openTemplatePanel() {
+  if (state.busy) return;
+  elements.templatePanel.hidden = false;
+  elements.templateTrigger.setAttribute("aria-expanded", "true");
+  elements.templateSearch.focus();
+}
+
+function closeTemplatePanel() {
+  elements.templatePanel.hidden = true;
+  elements.templateTrigger.setAttribute("aria-expanded", "false");
+}
+
+function applyPromptTemplate(templateId) {
+  const template = state.promptCatalog.templates.find((item) => item.id === templateId);
+  if (!template) return;
+  elements.input.value = template.prompt;
+  resizeInput();
+  closeTemplatePanel();
+  elements.input.focus();
+  elements.input.setSelectionRange(elements.input.value.length, elements.input.value.length);
+}
+
 function openSidebar() { elements.sidebar.classList.add("open"); elements.scrim.classList.add("open"); }
 function closeSidebar() { elements.sidebar.classList.remove("open"); elements.scrim.classList.remove("open"); }
 
@@ -192,16 +248,39 @@ $("#delete-task").addEventListener("click", async () => {
   else renderMessages(null);
 });
 document.querySelectorAll("[data-prompt]").forEach((button) => button.addEventListener("click", () => sendMessage(button.dataset.prompt)));
+elements.templateTrigger.addEventListener("click", () => {
+  if (elements.templatePanel.hidden) openTemplatePanel();
+  else closeTemplatePanel();
+});
+$("#template-close").addEventListener("click", closeTemplatePanel);
+elements.templateSearch.addEventListener("input", renderPromptTemplates);
+elements.templateCategories.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-template-category]");
+  if (!button) return;
+  state.activeTemplateCategory = button.dataset.templateCategory;
+  renderTemplateCategories();
+  renderPromptTemplates();
+});
+elements.templateList.addEventListener("click", (event) => {
+  const card = event.target.closest("[data-template-id]");
+  if (card) applyPromptTemplate(card.dataset.templateId);
+});
 $("#open-sidebar").addEventListener("click", openSidebar);
 $("#close-sidebar").addEventListener("click", closeSidebar);
 elements.scrim.addEventListener("click", closeSidebar);
 document.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); createTask(); }
+  if (event.key === "Escape" && !elements.templatePanel.hidden) closeTemplatePanel();
 });
 
 async function boot() {
   try {
-    const [status] = await Promise.all([request("/api/status"), refreshList()]);
+    const [status, promptCatalog] = await Promise.all([
+      request("/api/status"), request("/api/prompt-templates"), refreshList(),
+    ]);
+    state.promptCatalog = promptCatalog;
+    renderTemplateCategories();
+    renderPromptTemplates();
     $("#runtime-dot").classList.add("online");
     $("#runtime-label").textContent = status.mode === "demo" ? "演示模式" : status.provider;
     $("#model-label").textContent = status.mode === "demo" ? "配置 API Key 以启用模型" : status.model;
