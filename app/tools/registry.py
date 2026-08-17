@@ -110,9 +110,9 @@ def _calculate(operation: str, left: float, right: float) -> dict[str, float | s
 
 
 # 作用：创建项目启动时使用的默认工具集合。
-# 返回：已经注册时间与计算工具的新 Registry；每次调用互不共享可变字典。
+# 返回：已经注册时间、计算、搜索和天气工具的新 Registry；每次调用互不共享可变字典。
 # 扩展方式：新增 Tool 后继续 registry.register(...)，无需修改 Agent Loop。
-def create_default_registry() -> ToolRegistry:
+def create_default_registry(*, tavily_api_key: str = "", http_client: Any = None) -> ToolRegistry:
     # 先创建空目录，再逐个注册，重复名保护会在这里立即生效。
     registry = ToolRegistry()
     # 时间工具的 Schema 允许省略 time_zone，此时 handler 使用上海默认值。
@@ -154,5 +154,10 @@ def create_default_registry() -> ToolRegistry:
             handler=_calculate,
         )
     )
+    # 网络工具拆分在独立模块中，延迟导入可避免 registry 与 network 相互导入时形成环。
+    from app.tools.network import create_network_tools
+
+    for tool in create_network_tools(tavily_api_key=tavily_api_key, client=http_client):
+        registry.register(tool)
     # 返回完整注册表，交给普通工具调用和 PTC 层共同使用。
     return registry

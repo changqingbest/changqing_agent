@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import Callable
 from typing import Any
@@ -89,10 +90,10 @@ class AgentLoop:
                     # execute_ptc 的参数外层仍是 JSON，其中 code 字段才是受限程序文本。
                     if name == self.ptc.TOOL_NAME:
                         parsed = json.loads(arguments or "{}")
-                        result = self.ptc.execute(parsed.get("code", ""))
+                        result = await asyncio.to_thread(self.ptc.execute, parsed.get("code", ""))
                     else:
                         # 其他名称都走普通 Registry，包括未知名称的明确报错。
-                        result = self.tools.call(name, arguments)
+                        result = await asyncio.to_thread(self.tools.call, name, arguments)
                 except Exception as exc:  # 工具错误作为结果返回，让模型有机会自行修正。
                     # 不让单次工具错误直接杀死 Agent：模型看到 error 后可修正参数或代码重试。
                     # 风险：生产环境应再区分可恢复业务错误与必须立即终止的系统错误。

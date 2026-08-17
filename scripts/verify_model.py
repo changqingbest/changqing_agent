@@ -18,7 +18,7 @@ async def main() -> None:
         raise SystemExit("未检测到 DASHSCOPE_API_KEY 或 OPENAI_API_KEY。")
 
     # 使用与 Web 服务相同的默认工具集合，但实例独立，验证不会修改服务进程状态。
-    tools = create_default_registry()
+    tools = create_default_registry(tavily_api_key=settings.tavily_api_key)
     # 按发生顺序保存精简事件标签，最终用于确认模型是否真的经过工具调用阶段。
     events: list[str] = []
 

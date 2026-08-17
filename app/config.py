@@ -58,6 +58,8 @@ class Settings:
     port: int
     # 每轮对话放在最前面的系统指令，用来规定 Agent 的身份与行为原则。
     system_prompt: str
+    # 可选的 Tavily 搜索密钥；为空时 web_search 自动使用免密钥 Bing RSS。
+    tavily_api_key: str
 
     # 作用：用统一属性判断是否缺少模型密钥。
     # 返回：True 表示 Provider 应走本地演示回复；False 表示可调用真实模型。
@@ -105,6 +107,7 @@ def load_settings() -> Settings:
             "SYSTEM_PROMPT",
             "你是常青 Agent。回答准确、简洁；需要时主动调用工具。复杂的多工具任务优先使用 PTC。",
         ),
+        tavily_api_key=os.getenv("TAVILY_API_KEY", ""),
     )
 
 

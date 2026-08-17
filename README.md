@@ -34,6 +34,7 @@ app/
 ├── store.py                         JSON 会话存储
 ├── providers/openai_compatible.py   千问/OpenAI 兼容模型适配层
 ├── tools/registry.py                工具注册、Schema 和调度
+├── tools/network.py                 联网搜索和天气查询
 └── ptc/executor.py                  PTC 受限 Python 解释执行层
 public/                              原生网页
 scripts/verify_model.py              真实模型与 PTC 验证脚本
@@ -86,7 +87,17 @@ OPENAI_MODEL=gpt-4.1-mini
 HOST=127.0.0.1
 PORT=8008
 SYSTEM_PROMPT=你是常青 Agent。回答准确、简洁；需要时主动调用工具。
+TAVILY_API_KEY=
 ```
+
+## 内置工具
+
+- `get_current_time`：查询指定 IANA 时区的当前时间。
+- `calculate`：加、减、乘、除基础计算。
+- `web_search`：互联网搜索；配置 `TAVILY_API_KEY` 时使用 Tavily，未配置时使用免密钥 Bing RSS。
+- `get_weather`：通过 Open-Meteo 查询地点、当前天气及未来 1～7 天预报，无需 API Key。
+
+网络工具统一设置连接/读取超时。它们仍通过同一个 `ToolRegistry` 暴露给普通 function calling 和 PTC；Agent Loop 会在线程中执行同步工具，避免网络请求阻塞 FastAPI 事件循环。
 
 ## API
 

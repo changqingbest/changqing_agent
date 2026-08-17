@@ -33,8 +33,8 @@ class ChatRequest(BaseModel):
 # 以下对象都是进程级单例，在模块导入（应用启动）时组装一次。
 # 它们保存配置和无会话状态的服务对象，可被多个请求复用。
 
-# 默认工具目录，目前包含时间和基础计算工具。
-tools = create_default_registry()
+# 默认工具目录，包含时间、计算、联网搜索和天气查询。
+tools = create_default_registry(tavily_api_key=settings.tavily_api_key)
 # PTC 与普通 Agent 调用共享同一个 tools，保证工具定义和真实执行函数一致。
 ptc = PTCExecutor(tools)
 # Provider 只接收模型相关配置；api_key 不会通过状态接口返回。
@@ -53,7 +53,7 @@ agent = AgentLoop(
 # 会话保存到项目 data 目录；该 JSON 文件已被 .gitignore 排除。
 store = ConversationStore(PROJECT_ROOT / "data" / "conversations.json")
 # FastAPI 应用对象是 uvicorn 的加载入口 app.server:app。
-app = FastAPI(title="Changqing Agent", version="0.2.0")
+app = FastAPI(title="Changqing Agent", version="0.3.0")
 
 
 # GET /api/status
@@ -68,6 +68,8 @@ async def status() -> dict[str, Any]:
         "provider": settings.provider_name,
         # ptc=True 表示本进程已经挂载程序化工具调用层，不代表任意代码执行已开放。
         "ptc": True,
+        "tools": sorted(tools.names()),
+        "search_provider": "tavily" if settings.tavily_api_key else "bing_rss",
         "port": settings.port,
     }
 
