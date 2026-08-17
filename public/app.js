@@ -24,6 +24,22 @@ const elements = {
   templateList: $("#template-list"),
 };
 
+// 背景只做轻微指针视差，真正的极光漂移动画由 CSS 完成。
+// requestAnimationFrame 把高频 pointermove 合并为每帧一次，避免影响聊天滚动。
+const ambientStage = $(".ambient-stage");
+const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+let ambientFrame = 0;
+window.addEventListener("pointermove", (event) => {
+  if (reduceMotion.matches || !ambientStage) return;
+  const x = ((event.clientX / window.innerWidth) - 0.5) * 18;
+  const y = ((event.clientY / window.innerHeight) - 0.5) * 14;
+  cancelAnimationFrame(ambientFrame);
+  ambientFrame = requestAnimationFrame(() => {
+    ambientStage.style.setProperty("--ambient-x", `${x}px`);
+    ambientStage.style.setProperty("--ambient-y", `${y}px`);
+  });
+}, { passive: true });
+
 async function request(url, options) {
   const response = await fetch(url, options);
   if (!response.ok) {

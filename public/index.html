@@ -7,15 +7,23 @@
     <title>Changqing Agent</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=0.4.1" />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css?v=0.5.0" />
   </head>
   <body>
+    <div class="ambient" aria-hidden="true">
+      <div class="ambient-stage">
+        <div class="aurora aurora-one"></div>
+        <div class="aurora aurora-two"></div>
+        <div class="aurora aurora-three"></div>
+      </div>
+      <div class="ambient-grid"></div>
+      <div class="ambient-grain"></div>
+    </div>
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
         <header class="brand-row">
-          <div class="brand-mark" aria-hidden="true"><span></span><span></span></div>
-          <div class="brand-name">CHANGQING</div>
+          <img class="brand-logo" src="/changqing-logo.svg?v=0.5.0" alt="长卿 Changqing AI" />
           <button class="icon-button mobile-only" id="close-sidebar" aria-label="关闭任务栏">×</button>
         </header>
 
@@ -94,6 +102,6 @@
       </main>
     </div>
     <div class="sidebar-scrim" id="sidebar-scrim"></div>
-    <script type="module" src="/app.js?v=0.4.1"></script>
+    <script type="module" src="/app.js?v=0.5.0"></script>
   </body>
 </html>

@@ -1,0 +1,29 @@
+<svg width="196" height="54" viewBox="0 0 196 54" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">长卿 Changqing AI</title>
+  <desc id="desc">由双菱形符号、长卿中文字标和 Changqing AI 英文签名组成的品牌标志</desc>
+  <defs>
+    <linearGradient id="mark" x1="3" y1="3" x2="43" y2="45" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E4FFAA"/>
+      <stop offset=".48" stop-color="#C8FF65"/>
+      <stop offset="1" stop-color="#6FF5D2"/>
+    </linearGradient>
+    <linearGradient id="type" x1="54" y1="8" x2="124" y2="43" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#C7D8D2"/>
+    </linearGradient>
+    <filter id="glow" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="3.5" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0.55 0 0 0 0.4  0 1 0 0 1  0 0 0.55 0 0.3  0 0 0 .48 0"/>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <g transform="translate(4 8)">
+    <rect x="3.5" y="3.5" width="22" height="22" rx="3.2" transform="rotate(45 3.5 3.5)" stroke="url(#mark)" stroke-width="1.8" filter="url(#glow)"/>
+    <rect x="19.5" y="12.5" width="19" height="19" rx="3" transform="rotate(45 19.5 12.5)" stroke="#B7CCC5" stroke-opacity=".52" stroke-width="1.4"/>
+    <circle cx="22" cy="19" r="2.2" fill="#C8FF65" filter="url(#glow)"/>
+  </g>
+  <text x="55" y="31" fill="url(#type)" font-family="Noto Sans SC, Microsoft YaHei, sans-serif" font-size="25" font-weight="600" letter-spacing="3">长卿</text>
+  <text x="57" y="45" fill="#7D918A" font-family="IBM Plex Mono, monospace" font-size="6.8" font-weight="500" letter-spacing="2.1">CHANGQING AI</text>
+  <path d="M151 14H187" stroke="url(#mark)" stroke-opacity=".3" stroke-width=".8"/>
+  <circle cx="190" cy="14" r="2" fill="#C8FF65" fill-opacity=".8"/>
+</svg>

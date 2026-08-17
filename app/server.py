@@ -54,7 +54,7 @@ agent = AgentLoop(
 # 会话保存到项目 data 目录；该 JSON 文件已被 .gitignore 排除。
 store = ConversationStore(PROJECT_ROOT / "data" / "conversations.json")
 # FastAPI 应用对象是 uvicorn 的加载入口 app.server:app。
-app = FastAPI(title="Changqing Agent", version="0.4.1")
+app = FastAPI(title="Changqing Agent", version="0.5.0")
 
 
 # 本地工作台的 HTML/JS/CSS 会频繁更新。明确禁止浏览器缓存这些入口资源，
@@ -62,7 +62,7 @@ app = FastAPI(title="Changqing Agent", version="0.4.1")
 @app.middleware("http")
 async def disable_frontend_cache(request: Request, call_next):
     response = await call_next(request)
-    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css"}:
+    if request.url.path in {"/", "/index.html", "/app.js", "/styles.css", "/changqing-logo.svg"}:
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate"
         response.headers["Pragma"] = "no-cache"
     return response
