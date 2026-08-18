@@ -2,13 +2,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import time
 from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
 from app.ptc import PTCExecutor
+from app.logging_config import log_event
 from app.tools import ToolRegistry
+
+
+logger = logging.getLogger(__name__)
 
 
 # Agent Loop 是框架的“编排中心”，但它不直接实现模型 HTTP 请求或具体工具。
@@ -73,9 +79,29 @@ class AgentLoop:
         # 一轮 Agent Loop 固定使用启动该轮时的 Provider 快照。
         # 前端即使在工具调用期间切换模型，也只会影响下一轮请求，不会让同一轮跨模型。
         provider = self.provider
+        run_started = time.perf_counter()
+        log_event(
+            logger,
+            logging.INFO,
+            "agent.run.started",
+            "Agent Loop 开始执行",
+            model=getattr(provider, "model", "unknown"),
+            history_messages=len(history),
+            tool_count=len(definitions),
+            max_steps=self.max_steps,
+        )
 
         # 每轮最多产生一次模型请求；step=0 是首次思考，后续轮次处理工具结果。
         for step in range(self.max_steps):
+            step_started = time.perf_counter()
+            log_event(
+                logger,
+                logging.DEBUG,
+                "agent.step.started",
+                "Agent 开始模型推理步骤",
+                step=step + 1,
+                context_messages=len(messages),
+            )
             # 先发状态事件，使网页在等待模型网络响应期间能展示“正在思考”。
             on_event({"type": "status", "value": "thinking" if step == 0 else "working"})
             # Provider 返回兼容 message：可能包含 content，也可能包含一个或多个 tool_calls。
@@ -87,6 +113,16 @@ class AgentLoop:
                 # content 为空时提供明确兜底文字，避免前端收到 null。
                 answer = reply.get("content") or "模型没有返回文本。"
                 on_event({"type": "answer", "value": answer})
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "agent.run.completed",
+                    "Agent Loop 已生成最终答案",
+                    steps=step + 1,
+                    answer_chars=len(answer),
+                    duration_ms=round((time.perf_counter() - run_started) * 1000, 2),
+                    step_duration_ms=round((time.perf_counter() - step_started) * 1000, 2),
+                )
                 return answer
 
             # 工具结果前必须先保留包含 tool_calls 的 assistant 消息，协议顺序不能颠倒。
@@ -97,6 +133,17 @@ class AgentLoop:
                 function = call.get("function", {})
                 name = function.get("name", "")
                 arguments = function.get("arguments", "{}")
+                tool_started = time.perf_counter()
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "agent.tool.started",
+                    "Agent 请求执行工具",
+                    step=step + 1,
+                    tool=name or "unknown",
+                    argument_chars=len(arguments) if isinstance(arguments, str) else None,
+                    call_id=call.get("id"),
+                )
                 # 事件只暴露工具名，不向前端主动暴露密钥或完整模型上下文。
                 on_event({"type": "tool_start", "name": name})
                 try:
@@ -111,6 +158,28 @@ class AgentLoop:
                     # 不让单次工具错误直接杀死 Agent：模型看到 error 后可修正参数或代码重试。
                     # 风险：生产环境应再区分可恢复业务错误与必须立即终止的系统错误。
                     result = {"error": str(exc)}
+                    log_event(
+                        logger,
+                        logging.WARNING,
+                        "agent.tool.failed",
+                        "工具执行失败，错误将交回模型处理",
+                        exc_info=True,
+                        step=step + 1,
+                        tool=name or "unknown",
+                        error_type=type(exc).__name__,
+                        duration_ms=round((time.perf_counter() - tool_started) * 1000, 2),
+                    )
+                else:
+                    log_event(
+                        logger,
+                        logging.INFO,
+                        "agent.tool.completed",
+                        "工具执行完成",
+                        step=step + 1,
+                        tool=name or "unknown",
+                        result_type=type(result).__name__,
+                        duration_ms=round((time.perf_counter() - tool_started) * 1000, 2),
+                    )
                 # tool_end 用于网页观察和调试；结果可能较大，生产版应考虑截断或脱敏。
                 on_event({"type": "tool_end", "name": name, "result": result})
                 # 按协议把工具结果追加为 role=tool，并用原 call.id 建立对应关系。
@@ -124,4 +193,12 @@ class AgentLoop:
                 )
 
         # 循环耗尽仍未得到最终文本时主动失败，避免静默返回不完整结果。
+        log_event(
+            logger,
+            logging.ERROR,
+            "agent.run.step_limit",
+            "Agent Loop 达到最大执行步数",
+            max_steps=self.max_steps,
+            duration_ms=round((time.perf_counter() - run_started) * 1000, 2),
+        )
         raise RuntimeError(f"Agent 超过最大执行步数：{self.max_steps}")

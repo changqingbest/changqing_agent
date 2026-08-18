@@ -1,6 +1,7 @@
 .env
 data/*.json
 !data/.gitkeep
+logs/
 .venv/
 venv/
 __pycache__/

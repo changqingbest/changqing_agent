@@ -2,10 +2,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import re
+import time
+from contextlib import asynccontextmanager
 from contextlib import suppress
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -14,11 +19,29 @@ from pydantic import AnyHttpUrl, BaseModel, Field
 
 from app.agent import AgentLoop
 from app.config import PROJECT_ROOT, settings
+from app.logging_config import (
+    bind_conversation_id,
+    bind_request_id,
+    configure_logging,
+    log_event,
+    reset_conversation_id,
+    reset_request_id,
+)
 from app.prompts import get_prompt_catalog
 from app.providers.openai_compatible import OpenAICompatibleProvider
 from app.ptc import PTCExecutor
 from app.store import ConversationStore
 from app.tools import create_default_registry
+
+
+configure_logging(
+    log_dir=settings.log_dir,
+    level=settings.log_level,
+    max_bytes=settings.log_max_bytes,
+    backup_count=settings.log_backup_count,
+)
+logger = logging.getLogger(__name__)
+_REQUEST_ID_PATTERN = re.compile(r"^[A-Za-z0-9._:-]{1,64}$")
 
 
 # 本文件是“传输层/组装层”：把配置、模型、工具、PTC、存储和 Agent Loop 连接起来，
@@ -83,8 +106,79 @@ agent = AgentLoop(
 )
 # 会话保存到项目 data 目录；该 JSON 文件已被 .gitignore 排除。
 store = ConversationStore(PROJECT_ROOT / "data" / "conversations.json")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    log_event(
+        logger,
+        logging.INFO,
+        "service.started",
+        "常青 Agent 服务已启动",
+        host=settings.host,
+        port=settings.port,
+        provider=runtime_provider_name,
+        model=agent.provider.model,
+        demo=agent.provider.is_demo,
+        tools=sorted(tools.names()),
+        log_file=str(settings.log_dir / "changqing-agent.jsonl"),
+    )
+    try:
+        yield
+    finally:
+        log_event(logger, logging.INFO, "service.stopped", "常青 Agent 服务已停止")
+
+
 # FastAPI 应用对象是 uvicorn 的加载入口 app.server:app。
-app = FastAPI(title="Changqing Agent", version="0.8.0")
+app = FastAPI(title="Changqing Agent", version="0.9.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def request_logging(request: Request, call_next):
+    supplied_id = request.headers.get("x-request-id", "")
+    request_id = supplied_id if _REQUEST_ID_PATTERN.fullmatch(supplied_id) else uuid4().hex
+    request.state.request_id = request_id
+    token = bind_request_id(request_id)
+    started = time.perf_counter()
+    client = request.client.host if request.client else "unknown"
+    log_event(
+        logger,
+        logging.INFO,
+        "http.request.started",
+        "收到 HTTP 请求",
+        method=request.method,
+        path=request.url.path,
+        client=client,
+    )
+    try:
+        response = await call_next(request)
+    except Exception:
+        log_event(
+            logger,
+            logging.ERROR,
+            "http.request.failed",
+            "HTTP 请求处理失败",
+            exc_info=True,
+            method=request.method,
+            path=request.url.path,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+        raise
+    else:
+        response.headers["X-Request-ID"] = request_id
+        log_event(
+            logger,
+            logging.INFO,
+            "http.request.completed",
+            "HTTP 请求已完成",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+        return response
+    finally:
+        reset_request_id(token)
 
 
 # 本地工作台的 HTML/JS/CSS 会频繁更新。明确禁止浏览器缓存这些入口资源，
@@ -154,6 +248,15 @@ async def update_model_config(request: ModelConfigRequest) -> dict[str, Any]:
     if base_url.endswith(suffix):
         base_url = base_url[: -len(suffix)]
     if request.enable_search and not _is_qwen_compatible_endpoint(base_url):
+        log_event(
+            logger,
+            logging.WARNING,
+            "model.config.rejected",
+            "拒绝不兼容的千问搜索配置",
+            provider=provider_name,
+            model=model,
+            endpoint_host=urlparse(base_url).hostname,
+        )
         raise HTTPException(
             status_code=400,
             detail="千问原生联网搜索只能用于百炼 OpenAI 兼容端点",
@@ -174,6 +277,21 @@ async def update_model_config(request: ModelConfigRequest) -> dict[str, Any]:
         # 单次对象赋值是切换边界；AgentLoop.run 会在每轮开始时捕获该对象快照。
         agent.provider = next_provider
         runtime_provider_name = provider_name
+
+    log_event(
+        logger,
+        logging.INFO,
+        "model.config.updated",
+        "运行时模型配置已切换",
+        provider=provider_name,
+        model=model,
+        endpoint_host=urlparse(base_url).hostname,
+        api_key_replaced=bool(submitted_key),
+        api_key_configured=bool(api_key),
+        native_search=request.enable_search,
+        search_strategy=request.search_strategy if request.enable_search else None,
+        forced_search=request.forced_search if request.enable_search else False,
+    )
 
     return _public_model_config()
 
@@ -230,17 +348,32 @@ def _sse(event: dict[str, Any]) -> str:
 # 作用：持久化用户消息、后台运行 Agent，并把生命周期事件以 SSE 持续返回。
 # 返回：StreamingResponse；连接期间可能依次收到 status、tool_start、tool_end、answer、done。
 @app.post("/api/chat")
-async def chat(request: ChatRequest) -> StreamingResponse:
+async def chat(request: ChatRequest, http_request: Request) -> StreamingResponse:
     # 去掉首尾空白，既避免标题含无意义空格，也补充 Pydantic 长度校验遗漏的纯空白情况。
     message = request.message.strip()
     if not message:
         raise HTTPException(status_code=400, detail="消息不能为空")
+    conversation_token = bind_conversation_id(request.conversationId)
     try:
-        # 必须先保存 user 消息，再把更新后的历史交给 Agent，确保模型能看到本轮输入。
-        conversation = await store.add_message(request.conversationId, "user", message)
-    except KeyError as exc:
-        # Store 保持与 HTTP 无关，由本层负责把领域错误翻译成 404。
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        try:
+            # 必须先保存 user 消息，再把更新后的历史交给 Agent，确保模型能看到本轮输入。
+            conversation = await store.add_message(request.conversationId, "user", message)
+        except KeyError as exc:
+            # Store 保持与 HTTP 无关，由本层负责把领域错误翻译成 404。
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+        log_event(
+            logger,
+            logging.INFO,
+            "chat.accepted",
+            "聊天请求已进入 Agent 队列",
+            message_chars=len(message),
+            history_messages=len(conversation["messages"]),
+        )
+    finally:
+        reset_conversation_id(conversation_token)
+
+    request_id = getattr(http_request.state, "request_id", "-")
 
     # 异步生成器是 SSE 的数据源。每次 yield 一条事件，FastAPI 就可立即写给浏览器。
     # 该函数每个请求创建一份独立队列和任务，不会与其他会话混用事件。
@@ -250,6 +383,9 @@ async def chat(request: ChatRequest) -> StreamingResponse:
 
         # 后台协程负责运行可能耗时的模型循环；队列把它与 SSE 消费速度解耦。
         async def run_agent() -> None:
+            request_token = bind_request_id(str(request_id))
+            conversation_token = bind_conversation_id(request.conversationId)
+            started = time.perf_counter()
             try:
                 # put_nowait 是轻量同步回调，符合 AgentLoop 的 EventHandler 接口。
                 answer = await agent.run(conversation["messages"], queue.put_nowait)
@@ -257,13 +393,41 @@ async def chat(request: ChatRequest) -> StreamingResponse:
                 await store.add_message(request.conversationId, "assistant", answer)
                 # done 告诉网页本轮完整成功，前端可解除输入框禁用状态。
                 await queue.put({"type": "done"})
+                log_event(
+                    logger,
+                    logging.INFO,
+                    "chat.completed",
+                    "Agent 回答已生成并保存",
+                    duration_ms=round((time.perf_counter() - started) * 1000, 2),
+                    answer_chars=len(answer),
+                )
+            except asyncio.CancelledError:
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "chat.cancelled",
+                    "客户端断开后 Agent 任务已取消",
+                    duration_ms=round((time.perf_counter() - started) * 1000, 2),
+                )
+                raise
             except Exception as exc:
                 # 模型、存储或循环的未处理异常转为 SSE error，避免连接无说明地断开。
                 # 基础版本直接返回错误文本；生产环境应进行日志记录和敏感信息脱敏。
+                log_event(
+                    logger,
+                    logging.ERROR,
+                    "chat.failed",
+                    "Agent 处理聊天请求失败",
+                    exc_info=True,
+                    duration_ms=round((time.perf_counter() - started) * 1000, 2),
+                    error_type=type(exc).__name__,
+                )
                 await queue.put({"type": "error", "value": str(exc)})
             finally:
                 # 无论成功失败都放入结束哨兵，保证 event_stream 不会永久等待。
                 await queue.put(None)
+                reset_conversation_id(conversation_token)
+                reset_request_id(request_token)
 
         # create_task 让 Agent 生产事件与当前生成器消费事件并发推进。
         task = asyncio.create_task(run_agent())

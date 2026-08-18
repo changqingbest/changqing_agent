@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
+
+from app.logging_config import log_event
+
+
+logger = logging.getLogger(__name__)
 
 
 # ConversationStore 是最小 JSON 持久化层，负责会话的增删查和消息追加。
@@ -27,7 +33,18 @@ class ConversationStore:
         # 首次启动没有 conversations.json 属于正常情况。
         if not self.data_file.exists():
             return []
-        return json.loads(self.data_file.read_text(encoding="utf-8"))
+        try:
+            return json.loads(self.data_file.read_text(encoding="utf-8"))
+        except Exception:
+            log_event(
+                logger,
+                logging.ERROR,
+                "store.read.failed",
+                "会话数据文件读取失败",
+                exc_info=True,
+                file=str(self.data_file),
+            )
+            raise
 
     # 作用：把完整会话列表以 UTF-8 JSON 原子替换到目标文件。
     # items：当前所有会话；返回值：无；副作用：创建目录并写磁盘。
@@ -40,6 +57,14 @@ class ConversationStore:
         # ensure_ascii=False 让人工打开数据文件时能直接阅读中文。
         temporary.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
         temporary.replace(self.data_file)
+        log_event(
+            logger,
+            logging.DEBUG,
+            "store.write.completed",
+            "会话数据已原子写入",
+            file=str(self.data_file),
+            conversation_count=len(items),
+        )
 
     # 作用：返回左侧任务列表需要的轻量摘要，而不是把全部消息正文发给前端。
     # 返回：按 updatedAt 从新到旧排列的摘要列表。
@@ -84,6 +109,13 @@ class ConversationStore:
             # 先修改内存快照，再一次性持久化完整列表。
             items.append(conversation)
             self._write(items)
+            log_event(
+                logger,
+                logging.INFO,
+                "conversation.created",
+                "会话已创建",
+                conversation_id=conversation["id"],
+            )
             return conversation
 
     # 作用：向指定会话追加一条消息，并更新标题和最后修改时间。
@@ -112,6 +144,16 @@ class ConversationStore:
             # 任意角色新增消息都会把会话移动到任务列表顶部。
             conversation["updatedAt"] = datetime.now(UTC).isoformat()
             self._write(items)
+            log_event(
+                logger,
+                logging.INFO,
+                "conversation.message_added",
+                "会话消息已保存",
+                conversation_id=conversation_id,
+                role=role,
+                content_chars=len(content),
+                message_count=len(conversation["messages"]),
+            )
             return conversation
 
     # 作用：删除指定会话及其全部消息。
@@ -124,6 +166,21 @@ class ConversationStore:
             remaining = [item for item in items if item["id"] != conversation_id]
             # 长度未变化说明目标不存在，此时不要无意义重写数据文件。
             if len(remaining) == len(items):
+                log_event(
+                    logger,
+                    logging.WARNING,
+                    "conversation.delete_missing",
+                    "删除会话时未找到目标",
+                    conversation_id=conversation_id,
+                )
                 return False
             self._write(remaining)
+            log_event(
+                logger,
+                logging.INFO,
+                "conversation.deleted",
+                "会话已删除",
+                conversation_id=conversation_id,
+                remaining_count=len(remaining),
+            )
             return True

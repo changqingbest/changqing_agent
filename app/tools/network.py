@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import html
+import logging
 import re
+import time
 import xml.etree.ElementTree as ET
 from email.utils import parsedate_to_datetime
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
+from app.logging_config import log_event
 from app.tools.registry import Tool
 
 
 _USER_AGENT = "ChangqingAgent/0.3 (+local AI agent)"
 _TIMEOUT = httpx.Timeout(12.0, connect=5.0)
+logger = logging.getLogger(__name__)
 _NEWS_QUERY_PATTERN = re.compile(
     r"(?:最新|最近|今日|今天|本周|热点|热搜|快讯|新闻|资讯|动态|发布|"
     r"latest|recent|today|news|breaking|announcement|release)",
@@ -67,6 +72,20 @@ def _request(
 ) -> httpx.Response:
     """统一执行外部 HTTP 请求，并把网络错误转换为适合模型理解的异常。"""
     headers = {"User-Agent": _USER_AGENT, **kwargs.pop("headers", {})}
+    started = time.perf_counter()
+    parsed_url = urlparse(url)
+    request_details = {
+        "method": method.upper(),
+        "host": parsed_url.hostname,
+        "path": parsed_url.path,
+    }
+    log_event(
+        logger,
+        logging.INFO,
+        "external_http.started",
+        "开始请求外部服务",
+        **request_details,
+    )
     try:
         if client is not None:
             response = client.request(method, url, headers=headers, timeout=_TIMEOUT, **kwargs)
@@ -76,14 +95,50 @@ def _request(
                     method, url, headers=headers, timeout=_TIMEOUT, **kwargs
                 )
         response.raise_for_status()
+        log_event(
+            logger,
+            logging.INFO,
+            "external_http.completed",
+            "外部服务请求完成",
+            **request_details,
+            status_code=response.status_code,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            response_bytes=len(response.content),
+        )
         return response
     except httpx.TimeoutException as exc:
+        log_event(
+            logger,
+            logging.WARNING,
+            "external_http.timeout",
+            "外部服务请求超时",
+            **request_details,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
         raise RuntimeError("外部服务请求超时，请稍后重试。") from exc
     except httpx.HTTPStatusError as exc:
         status = exc.response.status_code
+        log_event(
+            logger,
+            logging.WARNING,
+            "external_http.http_error",
+            "外部服务返回错误状态",
+            **request_details,
+            status_code=status,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
         raise RuntimeError(f"外部服务返回 HTTP {status}。") from exc
     except httpx.HTTPError as exc:
-        raise RuntimeError(f"外部服务请求失败：{exc}") from exc
+        log_event(
+            logger,
+            logging.ERROR,
+            "external_http.network_error",
+            "外部服务网络请求失败",
+            **request_details,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            error_type=type(exc).__name__,
+        )
+        raise RuntimeError("外部服务请求失败，请稍后重试。") from exc
 
 
 def _plain_text(value: str) -> str:
@@ -209,6 +264,18 @@ def _web_search(
         results = _parse_rss_results(response, max_results, include_publication=False)
         provider = "bing_rss"
 
+    log_event(
+        logger,
+        logging.INFO,
+        "search.completed",
+        "联网搜索已完成",
+        provider=provider,
+        search_type=resolved_type,
+        query_chars=len(query),
+        requested_results=max_results,
+        returned_results=len(results),
+    )
+
     return {
         "query": query,
         "effective_query": news_query if resolved_type == "news" and not tavily_api_key else query,
@@ -282,6 +349,17 @@ def _get_weather(
                 "sunset": daily.get("sunset", [None] * len(dates))[index],
             }
         )
+
+    log_event(
+        logger,
+        logging.INFO,
+        "weather.completed",
+        "天气查询已完成",
+        location_chars=len(location),
+        matched_country=place.get("country"),
+        forecast_days=len(daily_rows),
+        provider="open-meteo",
+    )
 
     return {
         "location": {

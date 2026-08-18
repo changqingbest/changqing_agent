@@ -1,8 +1,16 @@
 from __future__ import annotations
 
+import logging
+import time
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
+
+from app.logging_config import log_event
+
+
+logger = logging.getLogger(__name__)
 
 
 # Provider 是 Agent Loop 与具体模型厂商之间的适配层。
@@ -74,35 +82,131 @@ class OpenAICompatibleProvider:
                 (item for item in reversed(messages) if item.get("role") == "user"),
                 {"content": "你好"},
             )
-            return {
+            reply = {
                 "role": "assistant",
                 "content": f"演示模式已收到：{user_message['content']}\n\n配置 API Key 后会切换到真实模型。",
             }
+            log_event(
+                logger,
+                logging.INFO,
+                "model.demo.completed",
+                "演示模式已生成本地回复",
+                model=self.model,
+                message_count=len(messages),
+                answer_chars=len(reply["content"]),
+            )
+            return reply
 
         # 请求体只放模型推理所需字段。tool_choice=auto 允许模型自行决定是否调用工具。
         payload = self._build_payload(messages, tools)
         # 百炼兼容接口和 OpenAI 接口都接受 Bearer Token；不要打印本字典。
         headers = {"Authorization": f"Bearer {self.api_key}"}
+        started = time.perf_counter()
+        endpoint_host = urlparse(self.base_url).hostname
+        log_event(
+            logger,
+            logging.INFO,
+            "model.request.started",
+            "开始调用模型服务",
+            model=self.model,
+            endpoint_host=endpoint_host,
+            message_count=len(messages),
+            tool_count=len(tools),
+            native_search=self.enable_search,
+            search_strategy=self.search_strategy if self.enable_search else None,
+            forced_search=self.forced_search if self.enable_search else False,
+        )
 
         # 为每次调用创建并自动关闭异步客户端。90 秒覆盖普通模型推理与工具规划耗时。
         # 基础版本优先清晰；高并发场景可把 client 提升为长生命周期连接池。
-        async with httpx.AsyncClient(timeout=httpx.Timeout(90.0)) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(90.0)) as client:
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=payload,
+                )
+        except httpx.HTTPError:
+            log_event(
+                logger,
+                logging.ERROR,
+                "model.request.network_error",
+                "模型服务网络请求失败",
+                exc_info=True,
+                model=self.model,
+                endpoint_host=endpoint_host,
+                duration_ms=round((time.perf_counter() - started) * 1000, 2),
             )
+            raise
 
         # 非 2xx/3xx 响应不能继续当作模型消息解析。
         if response.is_error:
-            # 只截取前 500 个字符，避免上游超长错误页灌满日志或 SSE 响应。
-            detail = response.text[:500]
-            raise RuntimeError(f"模型请求失败 ({response.status_code})：{detail}")
+            log_event(
+                logger,
+                logging.ERROR,
+                "model.request.http_error",
+                "模型服务返回错误状态",
+                model=self.model,
+                endpoint_host=endpoint_host,
+                status_code=response.status_code,
+                duration_ms=round((time.perf_counter() - started) * 1000, 2),
+                upstream_request_id=response.headers.get("x-request-id"),
+            )
+            # 不把上游响应正文带进异常和日志；部分服务会在错误正文中回显请求内容。
+            request_id = response.headers.get("x-request-id") or "unknown"
+            raise RuntimeError(
+                f"模型请求失败 ({response.status_code})，上游 request_id={request_id}"
+            )
 
         # Chat Completions 的正常答案位于 choices[0].message。
         # 使用安全 get 链避免缺字段时先抛出难懂的 KeyError/IndexError。
-        message = response.json().get("choices", [{}])[0].get("message")
+        try:
+            response_payload = response.json()
+        except ValueError as exc:
+            log_event(
+                logger,
+                logging.ERROR,
+                "model.response.invalid_json",
+                "模型服务返回了无效 JSON",
+                model=self.model,
+                status_code=response.status_code,
+                duration_ms=round((time.perf_counter() - started) * 1000, 2),
+                response_bytes=len(response.content),
+            )
+            raise RuntimeError("模型响应不是有效 JSON") from exc
+        choices = response_payload.get("choices") or []
+        message = choices[0].get("message") if choices else None
         # 空 message 表示供应商响应不符合当前协议，必须中止本轮 Agent Loop。
         if not message:
+            log_event(
+                logger,
+                logging.ERROR,
+                "model.response.invalid",
+                "模型响应缺少 message 字段",
+                model=self.model,
+                status_code=response.status_code,
+                duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            )
             raise RuntimeError("模型响应中没有 message")
+        usage = response_payload.get("usage") or {}
+        log_event(
+            logger,
+            logging.INFO,
+            "model.request.completed",
+            "模型服务调用完成",
+            model=self.model,
+            endpoint_host=endpoint_host,
+            status_code=response.status_code,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            upstream_request_id=(
+                response_payload.get("request_id")
+                or response.headers.get("x-request-id")
+                or response_payload.get("id")
+            ),
+            prompt_tokens=usage.get("prompt_tokens") or usage.get("input_tokens"),
+            completion_tokens=usage.get("completion_tokens") or usage.get("output_tokens"),
+            total_tokens=usage.get("total_tokens"),
+            tool_call_count=len(message.get("tool_calls") or []),
+            answer_chars=len(message.get("content") or ""),
+        )
         return message

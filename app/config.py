@@ -60,6 +60,11 @@ class Settings:
     system_prompt: str
     # 可选的 Tavily 搜索密钥；为空时 web_search 自动使用免密钥 Bing RSS。
     tavily_api_key: str
+    # 日志同时输出到控制台与项目日志目录；级别和滚动策略可通过环境变量调整。
+    log_level: str
+    log_dir: Path
+    log_max_bytes: int
+    log_backup_count: int
 
     # 作用：用统一属性判断是否缺少模型密钥。
     # 返回：True 表示 Provider 应走本地演示回复；False 表示可调用真实模型。
@@ -108,6 +113,10 @@ def load_settings() -> Settings:
             "你是常青 Agent。回答准确、简洁；需要时主动调用工具。复杂的多工具任务优先使用 PTC。",
         ),
         tavily_api_key=os.getenv("TAVILY_API_KEY", ""),
+        log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        log_dir=Path(os.getenv("LOG_DIR", str(PROJECT_ROOT / "logs"))).resolve(),
+        log_max_bytes=int(os.getenv("LOG_MAX_BYTES", str(5 * 1024 * 1024))),
+        log_backup_count=int(os.getenv("LOG_BACKUP_COUNT", "5")),
     )
 
 

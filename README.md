@@ -30,6 +30,7 @@ python -m scripts.verify_model
 app/
 ├── agent.py                         Agent Loop：模型、工具、结果的循环编排
 ├── config.py                        环境变量与端口配置
+├── logging_config.py                结构化日志、滚动文件、上下文与敏感信息脱敏
 ├── prompts.py                       内置提示词分类与模板目录
 ├── server.py                        FastAPI、REST、SSE 和静态网页
 ├── store.py                         JSON 会话存储
@@ -89,7 +90,28 @@ HOST=127.0.0.1
 PORT=8008
 SYSTEM_PROMPT=你是常青 Agent。回答准确、简洁；需要时主动调用工具。
 TAVILY_API_KEY=
+
+LOG_LEVEL=INFO
+LOG_DIR=D:\\daima\\changqing_agent\\logs
+LOG_MAX_BYTES=5242880
+LOG_BACKUP_COUNT=5
 ```
+
+## 日志与排障
+
+服务同时输出适合本地观察的控制台日志，以及一行一个 JSON 对象的结构化日志：
+
+```text
+logs/changqing-agent.jsonl
+logs/changqing-agent.jsonl.1
+...
+```
+
+默认单个文件达到 5 MiB 后滚动，保留 5 份历史文件。可通过 `LOG_LEVEL`、`LOG_DIR`、`LOG_MAX_BYTES` 和 `LOG_BACKUP_COUNT` 调整；日志目录默认不提交到 Git。
+
+日志覆盖服务启停、HTTP 请求、模型调用与 Token 用量、Agent 步骤、工具/PTC 执行、外部网络请求、会话存储和运行时模型切换。HTTP 响应会包含 `X-Request-ID`，同一请求的日志可用 `request_id` 串联；聊天任务还会记录 `conversation_id`。
+
+安全边界：默认只记录正文长度、参数字段名、结果类型和耗时，不记录聊天正文、工具参数值、系统提示词、Authorization 或 API Key。日志格式化层还会对 `Bearer ...`、`sk-...` 和常见 `api_key=...` 文本进行二次脱敏。
 
 ## 内置工具
 

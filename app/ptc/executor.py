@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import ast
+import hashlib
+import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
 from app.tools import ToolRegistry
+from app.logging_config import log_event
+
+
+logger = logging.getLogger(__name__)
 
 
 # 本文件实现 PTC（Programmatic Tool Calling）最小执行层。
@@ -99,20 +106,69 @@ class PTCExecutor:
     # 返回：output 是 emit 收集结果，tool_calls 是本次真实工具调用审计记录。
     # 异常：语法错误或不在白名单内的节点统一抛 PTCError。
     def execute(self, code: str) -> dict[str, Any]:
+        started = time.perf_counter()
+        code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()[:12]
+        log_event(
+            logger,
+            logging.INFO,
+            "ptc.execution.started",
+            "PTC 程序开始执行",
+            code_chars=len(code),
+            code_hash=code_hash,
+            max_statements=self.max_statements,
+        )
         try:
             # ast.parse 只把文本转换为语法树，本身不会执行代码，这是安全边界的第一步。
             tree = ast.parse(code, mode="exec")
         except SyntaxError as exc:
             # 保留异常链，日志调试时仍可找到原始 SyntaxError 位置。
+            log_event(
+                logger,
+                logging.WARNING,
+                "ptc.execution.rejected",
+                "PTC 程序语法解析失败",
+                code_chars=len(code),
+                code_hash=code_hash,
+                error_type=type(exc).__name__,
+                duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            )
             raise PTCError(f"PTC 语法错误：{exc.msg}") from exc
 
         # 每次调用创建全新状态，防止一个用户的变量或结果泄漏到另一个请求。
         state = _ExecutionState()
         # 顶层语句按模型生成的原顺序执行，行为与普通顺序程序一致。
-        for statement in tree.body:
-            self._statement(statement, state)
+        try:
+            for statement in tree.body:
+                self._statement(statement, state)
+        except Exception as exc:
+            expected_error = isinstance(exc, PTCError)
+            log_event(
+                logger,
+                logging.WARNING if expected_error else logging.ERROR,
+                "ptc.execution.failed",
+                "PTC 程序执行失败",
+                exc_info=not expected_error,
+                code_hash=code_hash,
+                error_type=type(exc).__name__,
+                statements=state.statements,
+                tool_call_count=len(state.calls),
+                duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            )
+            raise
         # 即使模型没有 emit，也返回结构完整的空 output，方便 Agent 判断和修正。
-        return {"output": state.emitted, "tool_calls": state.calls}
+        result = {"output": state.emitted, "tool_calls": state.calls}
+        log_event(
+            logger,
+            logging.INFO,
+            "ptc.execution.completed",
+            "PTC 程序执行完成",
+            code_hash=code_hash,
+            statements=state.statements,
+            tool_call_count=len(state.calls),
+            emitted_count=len(state.emitted),
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+        return result
 
     # 作用：为每个实际执行的语句计数，并在超过预算时立即终止。
     # state：当前单次执行状态；返回值：无。

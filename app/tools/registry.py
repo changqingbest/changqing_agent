@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
+
+from app.logging_config import log_event
+
+
+logger = logging.getLogger(__name__)
 
 
 # 统一描述工具处理函数的类型：可接收任意命名参数并返回任意可序列化结果。
@@ -52,6 +59,13 @@ class ToolRegistry:
         if tool.name in self._tools:
             raise ValueError(f"工具已注册：{tool.name}")
         self._tools[tool.name] = tool
+        log_event(
+            logger,
+            logging.DEBUG,
+            "tool.registered",
+            "工具已注册",
+            tool=tool.name,
+        )
 
     # 返回：当前所有工具名的集合副本。调用方修改集合不会影响内部字典。
     def names(self) -> set[str]:
@@ -70,6 +84,13 @@ class ToolRegistry:
         # get 而不是直接下标，是为了给未知名称提供更清楚的业务错误。
         tool = self._tools.get(name)
         if tool is None:
+            log_event(
+                logger,
+                logging.WARNING,
+                "tool.unknown",
+                "请求了未注册工具",
+                tool=name or "unknown",
+            )
             raise ValueError(f"未注册的工具：{name}")
         # 标准模型 tool_calls 的 arguments 通常是 JSON 字符串，需要先解码。
         if isinstance(arguments, str):
@@ -81,7 +102,41 @@ class ToolRegistry:
         if not isinstance(kwargs, dict):
             raise ValueError("工具参数必须是 JSON 对象")
         # Python 会继续校验必填参数、未知参数和类型相关运行错误。
-        return tool.handler(**kwargs)
+        started = time.perf_counter()
+        log_event(
+            logger,
+            logging.INFO,
+            "tool.handler.started",
+            "开始执行工具处理函数",
+            tool=name,
+            argument_fields=sorted(kwargs),
+        )
+        try:
+            result = tool.handler(**kwargs)
+        except Exception as exc:
+            expected_error = isinstance(exc, (TypeError, ValueError, RuntimeError))
+            log_event(
+                logger,
+                logging.WARNING if expected_error else logging.ERROR,
+                "tool.handler.failed",
+                "工具处理函数执行失败",
+                exc_info=not expected_error,
+                tool=name,
+                error_type=type(exc).__name__,
+                duration_ms=round((time.perf_counter() - started) * 1000, 2),
+            )
+            raise
+        log_event(
+            logger,
+            logging.INFO,
+            "tool.handler.completed",
+            "工具处理函数执行完成",
+            tool=name,
+            result_type=type(result).__name__,
+            result_items=len(result) if isinstance(result, (dict, list, tuple)) else None,
+            duration_ms=round((time.perf_counter() - started) * 1000, 2),
+        )
+        return result
 
 
 # 内置示例工具：获取指定 IANA 时区当前时间。
