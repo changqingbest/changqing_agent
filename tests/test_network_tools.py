@@ -26,8 +26,37 @@ class NetworkToolTests(unittest.TestCase):
             result = tools.call("web_search", {"query": "测试", "max_results": 1})
 
         self.assertEqual(result["provider"], "bing_rss")
+        self.assertEqual(result["search_type"], "web")
         self.assertEqual(len(result["results"]), 1)
         self.assertEqual(result["results"][0]["snippet"], "第一条 摘要")
+        self.assertNotIn("published_at", result["results"][0])
+
+    def test_recent_query_uses_news_rss_with_real_publication_fields(self) -> None:
+        rss = """<?xml version="1.0" encoding="utf-8"?>
+        <rss version="2.0"><channel>
+        <item><title>较早消息</title><link>https://example.com/old</link>
+          <description>较早摘要</description><pubDate>Sun, 16 Aug 2026 10:00:00 GMT</pubDate>
+          <source>较早媒体</source></item>
+        <item><title>最新 AI 消息</title><link>https://example.com/news</link>
+          <description>新闻摘要</description><pubDate>Mon, 17 Aug 2026 10:00:00 GMT</pubDate>
+          <source>示例媒体</source></item>
+        </channel></rss>"""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            self.assertEqual(request.url.host, "news.google.com")
+            self.assertEqual(request.url.path, "/rss/search")
+            self.assertEqual(request.url.params["q"], "AI 圈 when:7d")
+            return httpx.Response(200, text=rss, headers={"content-type": "application/xml"})
+
+        with httpx.Client(transport=httpx.MockTransport(handler)) as client:
+            tools = create_default_registry(http_client=client)
+            result = tools.call("web_search", {"query": "最近 AI 圈热点", "max_results": 1})
+
+        self.assertEqual(result["provider"], "google_news_rss")
+        self.assertEqual(result["search_type"], "news")
+        self.assertEqual(result["effective_query"], "AI 圈 when:7d")
+        self.assertEqual(result["results"][0]["source"], "示例媒体")
+        self.assertEqual(result["results"][0]["published_at"], "Mon, 17 Aug 2026 10:00:00 GMT")
 
     def test_web_search_uses_tavily_when_key_is_configured(self) -> None:
         def handler(request: httpx.Request) -> httpx.Response:
@@ -35,6 +64,7 @@ class NetworkToolTests(unittest.TestCase):
             self.assertEqual(request.headers["authorization"], "Bearer test-key")
             body = json.loads(request.content)
             self.assertEqual(body["query"], "Python")
+            self.assertNotIn("topic", body)
             return httpx.Response(
                 200,
                 json={
@@ -113,6 +143,8 @@ class NetworkToolTests(unittest.TestCase):
         tools = create_default_registry()
         with self.assertRaisesRegex(ValueError, "1 到 10"):
             tools.call("web_search", {"query": "x", "max_results": 11})
+        with self.assertRaisesRegex(ValueError, "auto、web 或 news"):
+            tools.call("web_search", {"query": "x", "search_type": "invalid"})
         with self.assertRaisesRegex(ValueError, "1 到 7"):
             tools.call("get_weather", {"location": "北京", "days": 8})
 

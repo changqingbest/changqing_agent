@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Callable
+from datetime import datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.ptc import PTCExecutor
 from app.tools import ToolRegistry
@@ -54,8 +56,16 @@ class AgentLoop:
     ) -> str:
         # 为本轮创建新的模型上下文：系统消息只用于推理，不写回 history。
         # 这里只复制 role/content，避免把数据库中的 id、createdAt 等内部字段发给模型。
+        runtime_now = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds")
+        runtime_context = (
+            f"{self.system_prompt}\n"
+            f"当前可信运行时日期时间为 {runtime_now}（Asia/Shanghai）。"
+            "联网问题必须以工具返回的标题、来源、链接和发布时间为依据；"
+            "不要因为结果年份晚于模型训练数据就称其为模拟、测试或异常数据，"
+            "也不要用记忆中的旧资讯替代搜索结果。"
+        )
         messages = [
-            {"role": "system", "content": self.system_prompt},
+            {"role": "system", "content": runtime_context},
             *({"role": item["role"], "content": item["content"]} for item in history),
         ]
         # 模型同时看到普通工具和 execute_ptc，可按任务复杂度自行选择调用方式。

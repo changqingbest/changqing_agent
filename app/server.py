@@ -54,7 +54,7 @@ agent = AgentLoop(
 # 会话保存到项目 data 目录；该 JSON 文件已被 .gitignore 排除。
 store = ConversationStore(PROJECT_ROOT / "data" / "conversations.json")
 # FastAPI 应用对象是 uvicorn 的加载入口 app.server:app。
-app = FastAPI(title="Changqing Agent", version="0.5.0")
+app = FastAPI(title="Changqing Agent", version="0.6.0")
 
 
 # 本地工作台的 HTML/JS/CSS 会频繁更新。明确禁止浏览器缓存这些入口资源，

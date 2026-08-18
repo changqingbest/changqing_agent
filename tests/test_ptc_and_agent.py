@@ -104,6 +104,8 @@ class AgentLoopTests(unittest.IsolatedAsyncioTestCase):
         # 最终文本、模型轮数、消息协议、工具结果和事件流分别验证不同责任边界。
         self.assertEqual(answer, "结果是 42。")
         self.assertEqual(provider.calls, 2)
+        self.assertIn("当前可信运行时日期时间", provider.last_messages[0]["content"])
+        self.assertIn("Asia/Shanghai", provider.last_messages[0]["content"])
         self.assertEqual(provider.last_messages[-1]["role"], "tool")
         self.assertIn('"result": 42', provider.last_messages[-1]["content"])
         self.assertIn("tool_start", [event["type"] for event in events])

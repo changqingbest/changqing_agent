@@ -3,12 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#f2f0e8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#10100f" media="(prefers-color-scheme: dark)" />
     <title>Changqing Agent</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=0.5.0" />
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700;900&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/styles.css?v=0.6.0" />
   </head>
   <body>
     <div class="ambient" aria-hidden="true">
@@ -23,7 +25,7 @@
     <div class="app-shell">
       <aside class="sidebar" id="sidebar">
         <header class="brand-row">
-          <img class="brand-logo" src="/changqing-logo.svg?v=0.5.0" alt="长卿 Changqing AI" />
+          <img class="brand-logo" src="/changqing-logo.svg?v=0.6.0" alt="长卿 Changqing AI" />
           <button class="icon-button mobile-only" id="close-sidebar" aria-label="关闭任务栏">×</button>
         </header>
 
@@ -102,6 +104,6 @@
       </main>
     </div>
     <div class="sidebar-scrim" id="sidebar-scrim"></div>
-    <script type="module" src="/app.js?v=0.5.0"></script>
+    <script type="module" src="/app.js?v=0.6.0"></script>
   </body>
 </html>
