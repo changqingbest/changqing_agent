@@ -31,6 +31,12 @@
       "skillPath": "skills/text/qianwen-text/SKILL.md",
       "computedHash": "5f4f6a6d25ab3a85f3bc85ed6bfc20a2c4ab1488c50cd5e9ffe6533b82b383a0"
     },
+    "qianwen-update-check": {
+      "source": "QianWen-AI/qianwen-ai",
+      "sourceType": "github",
+      "skillPath": "skills/ops/qianwen-update-check/SKILL.md",
+      "computedHash": "804190504613b3122835148741082a0a968e3ec3db75a171174e918b78a72294"
+    },
     "qianwen-usage": {
       "source": "QianWen-AI/qianwen-ai",
       "sourceType": "github",

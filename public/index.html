@@ -7,10 +7,16 @@
     <meta name="theme-color" content="#f2f0e8" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#10100f" media="(prefers-color-scheme: dark)" />
     <title>Changqing Agent</title>
+    <script>
+      try {
+        const savedTheme = localStorage.getItem("changqing-theme");
+        if (savedTheme === "light" || savedTheme === "dark") document.documentElement.dataset.theme = savedTheme;
+      } catch (_error) {}
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700;900&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/styles.css?v=0.6.0" />
+    <link rel="stylesheet" href="/styles.css?v=0.8.0" />
   </head>
   <body>
     <div class="ambient" aria-hidden="true">
@@ -52,7 +58,15 @@
           <button class="icon-button mobile-only" id="open-sidebar" aria-label="打开任务栏">☰</button>
           <div class="topbar-title" id="topbar-title">新任务</div>
           <div class="topbar-actions">
+            <div class="theme-switch" role="group" aria-label="界面主题">
+              <button type="button" data-theme-value="system" aria-label="跟随系统主题" title="跟随系统">◐</button>
+              <button type="button" data-theme-value="light" aria-label="使用浅色主题" title="浅色主题">☀</button>
+              <button type="button" data-theme-value="dark" aria-label="使用暗色主题" title="暗色主题">☾</button>
+            </div>
             <span class="local-badge"><i></i> LOCAL</span>
+            <button class="icon-button" id="model-settings" aria-label="模型与 API 设置" title="模型与 API 设置">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M14 4v6M4 17h2m4 0h10M10 14v6" /></svg>
+            </button>
             <button class="icon-button" id="delete-task" aria-label="删除当前任务" title="删除任务">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0-1 14H7L6 7m4 4v6m4-6v6" /></svg>
             </button>
@@ -103,7 +117,75 @@
         </div>
       </main>
     </div>
+    <dialog class="model-dialog" id="model-dialog" aria-labelledby="model-dialog-title">
+      <div class="model-dialog-head">
+        <div>
+          <span>CONTROL FILE / 02</span>
+          <h2 id="model-dialog-title">模型与 API</h2>
+        </div>
+        <button class="dialog-close" id="model-dialog-close" type="button" aria-label="关闭模型设置">×</button>
+      </div>
+      <div class="current-model-card">
+        <span>当前运行</span>
+        <strong id="current-model-name">读取中…</strong>
+        <small id="current-model-endpoint">—</small>
+      </div>
+      <form class="model-config-form" id="model-config-form">
+        <label>
+          <span>服务预设</span>
+          <select id="provider-preset">
+            <option value="qwen">千问 / DashScope</option>
+            <option value="openai">OpenAI Compatible</option>
+            <option value="custom">自定义兼容服务</option>
+          </select>
+        </label>
+        <label>
+          <span>供应商显示名称</span>
+          <input id="provider-name" type="text" maxlength="64" required placeholder="例如 Local Ollama" />
+        </label>
+        <label class="field-wide">
+          <span>API Base URL</span>
+          <input id="provider-base-url" type="url" required spellcheck="false" placeholder="https://example.com/v1" />
+        </label>
+        <label>
+          <span>模型名称</span>
+          <input id="provider-model" type="text" maxlength="128" required spellcheck="false" placeholder="例如 qwen-plus" />
+        </label>
+        <label>
+          <span>API Key</span>
+          <span class="secret-field">
+            <input id="provider-api-key" type="password" maxlength="2048" autocomplete="off" spellcheck="false" placeholder="输入新的 API Key" />
+            <button id="toggle-api-key" type="button" aria-label="显示或隐藏 API Key">显示</button>
+          </span>
+        </label>
+        <fieldset class="native-search-config field-wide" id="native-search-config">
+          <legend>千问原生联网搜索</legend>
+          <label class="check-control">
+            <input id="native-search-enabled" type="checkbox" />
+            <span><strong>启用模型侧实时搜索</strong><small>通过官方 enable_search 参数接入，仅支持百炼兼容端点</small></span>
+          </label>
+          <label>
+            <span>搜索策略</span>
+            <select id="native-search-strategy">
+              <option value="turbo">Turbo · 速度与效果平衡</option>
+              <option value="max">Max · 更全面，响应更慢</option>
+            </select>
+          </label>
+          <label class="check-control compact-check">
+            <input id="native-search-forced" type="checkbox" />
+            <span><strong>强制搜索</strong><small>关闭时由模型判断当前问题是否需要联网</small></span>
+          </label>
+          <p>OpenAI 兼容协议不会单独返回来源列表；需要可点击来源时，Agent 仍可调用本地 <code>web_search</code> 工具。</p>
+        </fieldset>
+        <p class="model-security-note field-wide">API Key 仅保存在当前 Python 进程内，不写入浏览器、本地文件或聊天记录；留空会保留当前密钥。</p>
+        <div class="model-form-status field-wide" id="model-form-status" role="status" aria-live="polite"></div>
+        <div class="model-form-actions field-wide">
+          <button class="model-cancel" id="model-cancel" type="button">取消</button>
+          <button class="model-apply" id="model-apply" type="submit">应用并切换 →</button>
+        </div>
+      </form>
+    </dialog>
     <div class="sidebar-scrim" id="sidebar-scrim"></div>
-    <script type="module" src="/app.js?v=0.6.0"></script>
+    <script type="module" src="/app.js?v=0.8.0"></script>
   </body>
 </html>

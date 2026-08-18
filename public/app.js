@@ -2,6 +2,7 @@ const $ = (selector) => document.querySelector(selector);
 const state = {
   conversations: [], activeId: null, busy: false,
   promptCatalog: { categories: [], templates: [] }, activeTemplateCategory: "all",
+  modelConfig: null, theme: "system",
 };
 
 const elements = {
@@ -22,6 +23,39 @@ const elements = {
   templateSearch: $("#template-search"),
   templateCategories: $("#template-categories"),
   templateList: $("#template-list"),
+  modelDialog: $("#model-dialog"),
+  modelForm: $("#model-config-form"),
+  providerPreset: $("#provider-preset"),
+  providerName: $("#provider-name"),
+  providerBaseUrl: $("#provider-base-url"),
+  providerModel: $("#provider-model"),
+  providerApiKey: $("#provider-api-key"),
+  modelFormStatus: $("#model-form-status"),
+  modelApply: $("#model-apply"),
+  nativeSearchEnabled: $("#native-search-enabled"),
+  nativeSearchStrategy: $("#native-search-strategy"),
+  nativeSearchForced: $("#native-search-forced"),
+};
+
+const THEME_STORAGE_KEY = "changqing-theme";
+const systemDarkTheme = window.matchMedia("(prefers-color-scheme: dark)");
+const providerPresets = {
+  qwen: {
+    provider_name: "Qwen / DashScope",
+    base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    model: "qwen-plus",
+    enable_search: true,
+    search_strategy: "turbo",
+    forced_search: false,
+  },
+  openai: {
+    provider_name: "OpenAI Compatible",
+    base_url: "https://api.openai.com/v1",
+    model: "gpt-4.1-mini",
+    enable_search: false,
+    search_strategy: "turbo",
+    forced_search: false,
+  },
 };
 
 // 背景只做轻微指针视差，真正的极光漂移动画由 CSS 完成。
@@ -40,11 +74,143 @@ window.addEventListener("pointermove", (event) => {
   });
 }, { passive: true });
 
+function readSavedTheme() {
+  try {
+    const saved = localStorage.getItem(THEME_STORAGE_KEY);
+    return ["system", "light", "dark"].includes(saved) ? saved : "system";
+  } catch (_error) {
+    return "system";
+  }
+}
+
+function applyTheme(theme, persist = true) {
+  state.theme = ["system", "light", "dark"].includes(theme) ? theme : "system";
+  if (state.theme === "system") delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = state.theme;
+  if (persist) {
+    try { localStorage.setItem(THEME_STORAGE_KEY, state.theme); } catch (_error) {}
+  }
+  document.querySelectorAll("[data-theme-value]").forEach((button) => {
+    const active = button.dataset.themeValue === state.theme;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  const systemLabel = systemDarkTheme.matches ? "暗色" : "浅色";
+  const systemButton = $("[data-theme-value='system']");
+  if (systemButton) systemButton.title = `跟随系统（当前${systemLabel}）`;
+}
+
+function inferProviderPreset(config) {
+  try {
+    const endpoint = new URL(config.base_url);
+    if (endpoint.hostname.endsWith("aliyuncs.com") && endpoint.pathname.includes("/compatible-mode/v1")) return "qwen";
+  } catch (_error) {}
+  if (config.base_url.includes("api.openai.com")) return "openai";
+  return "custom";
+}
+
+function syncNativeSearchControls() {
+  const enabled = elements.nativeSearchEnabled.checked;
+  elements.nativeSearchStrategy.disabled = !enabled;
+  elements.nativeSearchForced.disabled = !enabled;
+  $("#native-search-config").classList.toggle("disabled", !enabled);
+}
+
+function renderModelConfig(config) {
+  state.modelConfig = config;
+  $("#current-model-name").textContent = `${config.provider_name} / ${config.model}`;
+  const searchLabel = config.enable_search
+    ? `原生搜索 ${config.search_strategy.toUpperCase()}${config.forced_search ? " / 强制" : ""}`
+    : "原生搜索关闭";
+  $("#current-model-endpoint").textContent = `${config.base_url} · ${config.api_key_configured ? "KEY 已配置" : "未配置 KEY"} · ${searchLabel}`;
+  elements.providerPreset.value = inferProviderPreset(config);
+  elements.providerName.value = config.provider_name;
+  elements.providerBaseUrl.value = config.base_url;
+  elements.providerModel.value = config.model;
+  elements.nativeSearchEnabled.checked = Boolean(config.enable_search);
+  elements.nativeSearchStrategy.value = config.search_strategy || "turbo";
+  elements.nativeSearchForced.checked = Boolean(config.forced_search);
+  syncNativeSearchControls();
+  elements.providerApiKey.value = "";
+  elements.providerApiKey.placeholder = config.api_key_configured ? "留空保留当前密钥" : "输入新的 API Key";
+}
+
+function updateRuntimeLabels(config) {
+  $("#runtime-dot").classList.add("online");
+  $("#runtime-label").textContent = config.api_key_configured ? config.provider_name : "演示模式";
+  $("#model-label").textContent = config.api_key_configured ? config.model : "配置 API Key 以启用模型";
+}
+
+function openModelDialog() {
+  if (state.modelConfig) renderModelConfig(state.modelConfig);
+  elements.modelFormStatus.textContent = "";
+  elements.modelFormStatus.className = "model-form-status field-wide";
+  elements.providerApiKey.type = "password";
+  $("#toggle-api-key").textContent = "显示";
+  elements.modelDialog.showModal();
+}
+
+function closeModelDialog() {
+  elements.providerApiKey.value = "";
+  elements.modelDialog.close();
+}
+
+function applyProviderPreset() {
+  const preset = providerPresets[elements.providerPreset.value];
+  if (!preset) return;
+  elements.providerName.value = preset.provider_name;
+  elements.providerBaseUrl.value = preset.base_url;
+  elements.providerModel.value = preset.model;
+  elements.nativeSearchEnabled.checked = preset.enable_search;
+  elements.nativeSearchStrategy.value = preset.search_strategy;
+  elements.nativeSearchForced.checked = preset.forced_search;
+  syncNativeSearchControls();
+}
+
+async function saveModelConfig(event) {
+  event.preventDefault();
+  elements.modelApply.disabled = true;
+  elements.modelFormStatus.textContent = "正在切换运行时模型…";
+  elements.modelFormStatus.className = "model-form-status field-wide";
+  try {
+    const payload = {
+      provider_name: elements.providerName.value.trim(),
+      base_url: elements.providerBaseUrl.value.trim(),
+      model: elements.providerModel.value.trim(),
+      enable_search: elements.nativeSearchEnabled.checked,
+      search_strategy: elements.nativeSearchStrategy.value,
+      forced_search: elements.nativeSearchForced.checked,
+    };
+    const apiKey = elements.providerApiKey.value.trim();
+    const normalizedNewUrl = payload.base_url.replace(/\/$/, "").replace(/\/chat\/completions$/, "");
+    const normalizedCurrentUrl = state.modelConfig?.base_url.replace(/\/$/, "") || "";
+    if (!apiKey && normalizedNewUrl !== normalizedCurrentUrl) {
+      throw new Error("切换 API 地址时，请输入该服务对应的 API Key。");
+    }
+    if (apiKey) payload.api_key = apiKey;
+    const config = await request("/api/model-config", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    renderModelConfig(config);
+    updateRuntimeLabels(config);
+    elements.modelFormStatus.textContent = `已切换到 ${config.provider_name} / ${config.model}，下一轮对话生效。`;
+    elements.modelFormStatus.className = "model-form-status field-wide success";
+    elements.providerApiKey.value = "";
+  } catch (error) {
+    elements.modelFormStatus.textContent = `切换失败：${error.message}`;
+    elements.modelFormStatus.className = "model-form-status field-wide error";
+  } finally {
+    elements.modelApply.disabled = false;
+  }
+}
+
 async function request(url, options) {
   const response = await fetch(url, options);
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(body.error || `请求失败：${response.status}`);
+    throw new Error(body.detail || body.error || `请求失败：${response.status}`);
   }
   return response.json();
 }
@@ -284,22 +450,43 @@ elements.templateList.addEventListener("click", (event) => {
 $("#open-sidebar").addEventListener("click", openSidebar);
 $("#close-sidebar").addEventListener("click", closeSidebar);
 elements.scrim.addEventListener("click", closeSidebar);
+document.querySelectorAll("[data-theme-value]").forEach((button) => {
+  button.addEventListener("click", () => applyTheme(button.dataset.themeValue));
+});
+systemDarkTheme.addEventListener("change", () => {
+  if (state.theme === "system") applyTheme("system", false);
+});
+$("#model-settings").addEventListener("click", openModelDialog);
+$("#model-dialog-close").addEventListener("click", closeModelDialog);
+$("#model-cancel").addEventListener("click", closeModelDialog);
+elements.providerPreset.addEventListener("change", applyProviderPreset);
+elements.nativeSearchEnabled.addEventListener("change", syncNativeSearchControls);
+elements.modelForm.addEventListener("submit", saveModelConfig);
+$("#toggle-api-key").addEventListener("click", () => {
+  const showing = elements.providerApiKey.type === "text";
+  elements.providerApiKey.type = showing ? "password" : "text";
+  $("#toggle-api-key").textContent = showing ? "显示" : "隐藏";
+  elements.providerApiKey.focus();
+});
+elements.modelDialog.addEventListener("click", (event) => {
+  if (event.target === elements.modelDialog) closeModelDialog();
+});
 document.addEventListener("keydown", (event) => {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") { event.preventDefault(); createTask(); }
   if (event.key === "Escape" && !elements.templatePanel.hidden) closeTemplatePanel();
 });
 
 async function boot() {
+  applyTheme(readSavedTheme(), false);
   try {
-    const [status, promptCatalog] = await Promise.all([
-      request("/api/status"), request("/api/prompt-templates"), refreshList(),
+    const [status, promptCatalog, modelConfig] = await Promise.all([
+      request("/api/status"), request("/api/prompt-templates"), request("/api/model-config"), refreshList(),
     ]);
     state.promptCatalog = promptCatalog;
     renderTemplateCategories();
     renderPromptTemplates();
-    $("#runtime-dot").classList.add("online");
-    $("#runtime-label").textContent = status.mode === "demo" ? "演示模式" : status.provider;
-    $("#model-label").textContent = status.mode === "demo" ? "配置 API Key 以启用模型" : status.model;
+    renderModelConfig(modelConfig);
+    updateRuntimeLabels(modelConfig);
     if (state.conversations[0]) await selectConversation(state.conversations[0].id);
     else renderMessages(null);
   } catch (error) {

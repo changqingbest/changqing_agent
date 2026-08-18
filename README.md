@@ -95,10 +95,26 @@ TAVILY_API_KEY=
 
 - `get_current_time`：查询指定 IANA 时区的当前时间。
 - `calculate`：加、减、乘、除基础计算。
-- `web_search`：互联网搜索；配置 `TAVILY_API_KEY` 时使用 Tavily，未配置时使用免密钥 Bing RSS。
+- `web_search`：返回可供 Agent 引用的标题、链接和摘要；配置 `TAVILY_API_KEY` 时使用 Tavily，未配置时按查询类型使用免密钥 RSS 搜索。
 - `get_weather`：通过 Open-Meteo 查询地点、当前天气及未来 1～7 天预报，无需 API Key。
 
 网络工具统一设置连接/读取超时。它们仍通过同一个 `ToolRegistry` 暴露给普通 function calling 和 PTC；Agent Loop 会在线程中执行同步工具，避免网络请求阻塞 FastAPI 事件循环。
+
+### 千问原生联网搜索
+
+当模型使用百炼 OpenAI 兼容端点时，默认开启千问原生联网搜索。模型设置面板可以关闭此能力、选择 `turbo`/`max` 搜索策略，或开启强制搜索。实现按照[阿里云百炼联网搜索文档](https://help.aliyun.com/zh/model-studio/web-search)，在 Chat Completions 请求中发送：
+
+```json
+{
+  "enable_search": true,
+  "search_options": {
+    "search_strategy": "turbo",
+    "forced_search": false
+  }
+}
+```
+
+千问原生搜索用于模型侧实时信息增强；OpenAI 兼容协议不会返回独立来源列表。需要明确标题和链接时，Agent 仍可调用 `web_search` 函数工具。切换到非百炼端点后不会发送这些千问专有字段。
 
 ## 提示词模板
 
@@ -110,6 +126,7 @@ TAVILY_API_KEY=
 
 - `GET /api/status`：运行模式、模型、PTC 状态和端口
 - `GET /api/prompt-templates`：提示词分类与模板目录
+- `GET/POST /api/model-config`：读取或切换当前进程的模型配置；API Key 不回显、不落盘
 - `GET/POST /api/conversations`：列出或创建会话
 - `GET/DELETE /api/conversations/{id}`：读取或删除会话
 - `POST /api/chat`：运行 Agent，以 SSE 返回状态、工具和最终答案事件

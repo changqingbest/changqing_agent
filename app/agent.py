@@ -70,13 +70,16 @@ class AgentLoop:
         ]
         # 模型同时看到普通工具和 execute_ptc，可按任务复杂度自行选择调用方式。
         definitions = [*self.tools.definitions(), self.ptc.definition()]
+        # 一轮 Agent Loop 固定使用启动该轮时的 Provider 快照。
+        # 前端即使在工具调用期间切换模型，也只会影响下一轮请求，不会让同一轮跨模型。
+        provider = self.provider
 
         # 每轮最多产生一次模型请求；step=0 是首次思考，后续轮次处理工具结果。
         for step in range(self.max_steps):
             # 先发状态事件，使网页在等待模型网络响应期间能展示“正在思考”。
             on_event({"type": "status", "value": "thinking" if step == 0 else "working"})
             # Provider 返回兼容 message：可能包含 content，也可能包含一个或多个 tool_calls。
-            reply = await self.provider.complete(messages, definitions)
+            reply = await provider.complete(messages, definitions)
             # 某些供应商用 null 或省略字段表示没有工具调用，统一转换为空列表。
             tool_calls = reply.get("tool_calls") or []
             # 没有工具调用意味着模型认为任务已经结束，应把文本作为最终答案返回。

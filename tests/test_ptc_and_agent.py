@@ -110,6 +110,55 @@ class AgentLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('"result": 42', provider.last_messages[-1]["content"])
         self.assertIn("tool_start", [event["type"] for event in events])
 
+    async def test_provider_switch_only_affects_next_agent_run(self) -> None:
+        class SwitchingProvider:
+            def __init__(self) -> None:
+                self.calls = 0
+                self.on_first_call = lambda: None
+
+            async def complete(self, messages, tools):
+                self.calls += 1
+                if self.calls == 1:
+                    self.on_first_call()
+                    return {
+                        "role": "assistant",
+                        "content": None,
+                        "tool_calls": [{
+                            "id": "switch-call",
+                            "type": "function",
+                            "function": {
+                                "name": "calculate",
+                                "arguments": json.dumps({"operation": "add", "left": 1, "right": 1}),
+                            },
+                        }],
+                    }
+                return {"role": "assistant", "content": "旧模型完成本轮。"}
+
+        class NextProvider:
+            def __init__(self) -> None:
+                self.calls = 0
+
+            async def complete(self, messages, tools):
+                self.calls += 1
+                return {"role": "assistant", "content": "新模型。"}
+
+        tools = create_default_registry()
+        first_provider = SwitchingProvider()
+        next_provider = NextProvider()
+        agent = AgentLoop(
+            provider=first_provider,
+            tools=tools,
+            ptc=PTCExecutor(tools),
+            system_prompt="test",
+        )
+        first_provider.on_first_call = lambda: setattr(agent, "provider", next_provider)
+
+        answer = await agent.run([{"role": "user", "content": "计算"}])
+
+        self.assertEqual(answer, "旧模型完成本轮。")
+        self.assertEqual(first_provider.calls, 2)
+        self.assertEqual(next_provider.calls, 0)
+
 
 # 支持直接运行本文件；常规项目命令仍推荐 python -m unittest discover -s tests -v。
 if __name__ == "__main__":

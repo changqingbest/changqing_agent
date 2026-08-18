@@ -10,18 +10,54 @@ import httpx
 class OpenAICompatibleProvider:
     # 参数：api_key 为鉴权密钥；base_url 为兼容接口根地址；model 为模型标识。
     # 副作用：无网络请求，仅把启动配置保存到实例字段。
-    def __init__(self, *, api_key: str, base_url: str, model: str) -> None:
+    def __init__(
+        self,
+        *,
+        api_key: str,
+        base_url: str,
+        model: str,
+        enable_search: bool = False,
+        search_strategy: str = "turbo",
+        forced_search: bool = False,
+    ) -> None:
         # 密钥只能用于请求头，调用方不得把本字段输出到日志或前端。
         self.api_key = api_key
         # 去掉末尾斜杠，避免拼接后产生 //chat/completions。
         self.base_url = base_url.rstrip("/")
         # 每次请求都会把该值放进请求体的 model 字段。
         self.model = model
+        # 千问 OpenAI 兼容接口通过非标准顶层字段 enable_search 开启原生联网搜索。
+        self.enable_search = enable_search
+        # 官方支持 turbo（速度/效果平衡）和 max（更全面但更慢）两种通用策略。
+        if search_strategy not in {"turbo", "max"}:
+            raise ValueError("search_strategy 必须是 turbo 或 max")
+        self.search_strategy = search_strategy
+        # False 时由模型判断是否联网；True 用于强时效场景，要求每轮都执行搜索。
+        self.forced_search = forced_search
 
     # 返回：没有 API Key 时为 True，表示使用本地演示分支且不产生网络费用。
     @property
     def is_demo(self) -> bool:
         return not self.api_key
+
+    def _build_payload(
+        self, messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """构造请求体；仅启用时加入千问专有搜索字段。"""
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "tools": tools,
+            "tool_choice": "auto",
+            "temperature": 0.4,
+        }
+        if self.enable_search:
+            payload["enable_search"] = True
+            payload["search_options"] = {
+                "search_strategy": self.search_strategy,
+                "forced_search": self.forced_search,
+            }
+        return payload
 
     # 作用：发送一次 OpenAI Chat Completions 兼容请求，返回 assistant 消息对象。
     # messages：完整上下文，包含 system/user/assistant/tool 等角色消息。
@@ -44,13 +80,7 @@ class OpenAICompatibleProvider:
             }
 
         # 请求体只放模型推理所需字段。tool_choice=auto 允许模型自行决定是否调用工具。
-        payload = {
-            "model": self.model,
-            "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
-            "temperature": 0.4,
-        }
+        payload = self._build_payload(messages, tools)
         # 百炼兼容接口和 OpenAI 接口都接受 Bearer Token；不要打印本字典。
         headers = {"Authorization": f"Bearer {self.api_key}"}
 
