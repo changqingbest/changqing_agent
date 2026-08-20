@@ -81,6 +81,52 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px
 .ambient-grid { position: absolute; inset: 0; opacity: .12; background-image: linear-gradient(var(--ink) 1px, transparent 1px), linear-gradient(90deg, var(--ink) 1px, transparent 1px); background-size: 56px 56px; mask-image: radial-gradient(circle at 55% 42%, black, transparent 76%); }
 .ambient-grain { position: absolute; inset: 0; opacity: .12; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 160 160' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.88' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.7'/%3E%3C/svg%3E"); mix-blend-mode: multiply; }
 
+/* 动态线稿飞行物：几条直线折成纸飞机，沿对角线反复穿越，留下虚线尾迹。 */
+.ambient-kinetic {
+  position: absolute;
+  left: -7vw;
+  top: 14%;
+  width: 68px;
+  height: 38px;
+  color: var(--ink);
+  opacity: .6;
+  mix-blend-mode: multiply;
+  animation: kinetic-flight 26s linear infinite;
+}
+.kinetic-plane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  animation: kinetic-bob 3.4s ease-in-out infinite;
+}
+.kinetic-plane svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.kinetic-trail {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 8px);
+  width: 130px;
+  height: 0;
+  border-top: 2px dashed currentColor;
+  opacity: .55;
+}
+@keyframes kinetic-flight {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(122vw, -3vh, 0); }
+}
+@keyframes kinetic-bob {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-16px) rotate(4deg); }
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .ambient-kinetic { mix-blend-mode: screen; }
+}
+:root[data-theme="dark"] .ambient-kinetic { mix-blend-mode: screen; }
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) .aurora,
   :root:not([data-theme="light"]) .ambient-grain { mix-blend-mode: screen; }
