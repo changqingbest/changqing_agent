@@ -207,7 +207,8 @@ async def status() -> dict[str, Any]:
         "ptc": True,
         "tools": sorted(tools.names()),
         "search_provider": "tavily" if settings.tavily_api_key else "bing_rss",
-        "qwen_native_search": current_provider.enable_search,
+        # 演示模式不会发起真实模型请求，原生搜索实际未生效，如实报告为关闭。
+        "qwen_native_search": current_provider.enable_search and not current_provider.is_demo,
         "port": settings.port,
     }
 

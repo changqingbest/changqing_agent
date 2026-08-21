@@ -24,6 +24,12 @@ python -m app
 python -m scripts.verify_model
 ```
 
+运行单元测试：
+
+```powershell
+python -m pytest tests/
+```
+
 ## 核心结构
 
 ```text

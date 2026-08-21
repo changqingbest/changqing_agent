@@ -58,6 +58,27 @@ class RuntimeModelConfigTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["search_strategy"], "max")
         self.assertTrue(result["forced_search"])
 
+    async def test_status_reports_native_search_off_in_demo_mode(self) -> None:
+        demo_provider = OpenAICompatibleProvider(
+            api_key="",
+            base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
+            model="qwen-plus",
+            enable_search=True,
+        )
+
+        # 演示模式下即使配置了 enable_search，也不会发起真实请求，状态应为 False。
+        server.agent.provider = demo_provider
+        self.assertFalse((await server.status())["qwen_native_search"])
+
+        # 配置密钥后原生搜索才真正生效。
+        server.agent.provider = OpenAICompatibleProvider(
+            api_key="real-key",
+            base_url=demo_provider.base_url,
+            model="qwen-plus",
+            enable_search=True,
+        )
+        self.assertTrue((await server.status())["qwen_native_search"])
+
     async def test_native_search_rejects_non_qwen_endpoint(self) -> None:
         request = server.ModelConfigRequest(
             provider_name="Other Provider",
