@@ -124,12 +124,13 @@ class PromptManager:
         base_prompt: str,
         template: InterpreterTemplate,
         runtime_now: str,
+        runtime_weekday: str,
         tool_descriptions: str,
     ) -> str:
         """把基础身份、解释器、工具目录和 ReAct 协议合成系统上下文。"""
         return f"""{base_prompt}
 
-当前可信运行时日期时间为 {runtime_now}（Asia/Shanghai）。
+当前可信运行时日期时间为 {runtime_now}（Asia/Shanghai，{runtime_weekday}）。
 
 【当前解释器】
 名称：{template.name}
@@ -157,6 +158,8 @@ Action: Finish[<给用户的完整最终答案>]
 4. 执行动作后框架会追加 Observation；必须依据观察继续，不得伪造工具结果。
 5. Observation 不充分时继续调用工具；足够时使用 Finish，不要无限搜索。
 6. 联网问题必须以工具返回的标题、来源、链接和发布时间为依据，不用旧记忆替代搜索结果。
+7. 用户询问当前日期、时间或星期时必须调用 Time；星期必须直接采用 Time 返回的 weekday，禁止自行心算。
+8. “今天/昨天/明天”等相对日期必须以本轮可信运行时日期为基准换算，并在答案中写出绝对日期以消除歧义。
 """
 
 

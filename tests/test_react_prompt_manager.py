@@ -21,10 +21,12 @@ class PromptManagerTests(unittest.TestCase):
             base_prompt="test",
             template=selected,
             runtime_now="2026-08-22T12:00:00+08:00",
+            runtime_weekday="星期六",
             tool_descriptions="- Search: 搜索",
         )
         self.assertEqual(selected.id, "coding")
         self.assertIn("编程诊断解释器", prompt)
+        self.assertIn("2026-08-22T12:00:00+08:00（Asia/Shanghai，星期六）", prompt)
         self.assertIn("Action: Finish", prompt)
         self.assertIn("Observation", prompt)
 

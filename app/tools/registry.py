@@ -14,6 +14,9 @@ from app.logging_config import log_event
 logger = logging.getLogger(__name__)
 
 
+_WEEKDAYS_ZH = ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+
+
 # 统一描述工具处理函数的类型：可接收任意命名参数并返回任意可序列化结果。
 # 当前基础框架只调用同步函数；未来支持 async handler 时应在 Registry 边界统一 await。
 ToolHandler = Callable[..., Any]
@@ -142,9 +145,21 @@ class ToolRegistry:
 # 内置示例工具：获取指定 IANA 时区当前时间。
 # time_zone：例如 Asia/Shanghai；无效名称会由 ZoneInfo 抛出异常。
 # 返回：保留时区名及带 UTC 偏移的 ISO 时间，方便模型准确解释。
-def _get_current_time(time_zone: str = "Asia/Shanghai") -> dict[str, str]:
+def _get_current_time(time_zone: str = "Asia/Shanghai") -> dict[str, str | int]:
     now = datetime.now(ZoneInfo(time_zone))
-    return {"time_zone": time_zone, "value": now.isoformat(timespec="seconds")}
+    # 星期必须由 datetime 计算后结构化返回，不能只给模型 ISO 字符串让它自行心算。
+    # Python weekday() 使用星期一=0；isoweekday() 使用星期一=1、星期日=7。
+    utc_offset = now.strftime("%z")
+    formatted_offset = f"{utc_offset[:3]}:{utc_offset[3:]}" if utc_offset else ""
+    return {
+        "time_zone": time_zone,
+        "date": now.date().isoformat(),
+        "time": now.time().isoformat(timespec="seconds"),
+        "weekday": _WEEKDAYS_ZH[now.weekday()],
+        "weekday_iso": now.isoweekday(),
+        "utc_offset": formatted_offset,
+        "value": now.isoformat(timespec="seconds"),
+    }
 
 
 # 内置示例工具：对两个数字执行有限的基础运算。
@@ -174,7 +189,7 @@ def create_default_registry(*, tavily_api_key: str = "", http_client: Any = None
     registry.register(
         Tool(
             name="get_current_time",
-            description="获取指定 IANA 时区的当前时间。",
+            description="获取指定 IANA 时区的当前日期、时间、中文星期、ISO 星期序号和 UTC 偏移。",
             parameters={
                 "type": "object",
                 "properties": {

@@ -1,5 +1,6 @@
 import json
 import unittest
+from datetime import datetime
 
 from app.agent import AgentLoop
 from app.ptc import PTCExecutor
@@ -47,6 +48,17 @@ class PTCExecutorTests(unittest.TestCase):
             "emit(f\"answer={math['result']}\")"
         )
         self.assertEqual(result["output"], ["answer=42"])
+
+    def test_current_time_returns_structured_weekday_consistent_with_date(self) -> None:
+        result = self.tools.call("get_current_time", {"time_zone": "Asia/Shanghai"})
+        parsed = datetime.fromisoformat(result["value"])
+        weekdays = ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")
+
+        self.assertEqual(result["date"], parsed.date().isoformat())
+        self.assertEqual(result["time"], parsed.time().isoformat(timespec="seconds"))
+        self.assertEqual(result["weekday"], weekdays[parsed.weekday()])
+        self.assertEqual(result["weekday_iso"], parsed.isoweekday())
+        self.assertRegex(result["utc_offset"], r"^[+-]\d{2}:\d{2}$")
 
 
 # 最小假 Provider：第一次要求 execute_ptc，第二次读取工具结果并给出最终文本。
@@ -106,6 +118,7 @@ class AgentLoopTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(provider.calls, 2)
         self.assertIn("当前可信运行时日期时间", provider.last_messages[0]["content"])
         self.assertIn("Asia/Shanghai", provider.last_messages[0]["content"])
+        self.assertRegex(provider.last_messages[0]["content"], r"星期[一二三四五六日]")
         self.assertEqual(provider.last_messages[-1]["role"], "tool")
         self.assertIn('"result": 42', provider.last_messages[-1]["content"])
         self.assertIn("tool_start", [event["type"] for event in events])

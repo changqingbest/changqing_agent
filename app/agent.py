@@ -168,7 +168,11 @@ class AgentLoop:
         on_event: EventHandler = lambda _event: None,
     ) -> str:
         """选择解释器并运行一轮最多 ``max_steps`` 步的 ReAct。"""
-        runtime_now = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds")
+        runtime_datetime = datetime.now(ZoneInfo("Asia/Shanghai"))
+        runtime_now = runtime_datetime.isoformat(timespec="seconds")
+        runtime_weekday = ("星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日")[
+            runtime_datetime.weekday()
+        ]
         definitions = self.tools.definitions()
         ptc_definition = self.ptc.definition()
         user_text = self._last_user_text(history)
@@ -177,6 +181,7 @@ class AgentLoop:
             base_prompt=self.system_prompt,
             template=interpreter,
             runtime_now=runtime_now,
+            runtime_weekday=runtime_weekday,
             tool_descriptions=build_tool_descriptions(definitions, ptc_definition),
         )
         messages = [

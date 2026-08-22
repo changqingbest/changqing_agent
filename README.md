@@ -137,7 +137,7 @@ logs/changqing-agent.jsonl.1
 
 ## 内置工具
 
-- `get_current_time`：查询指定 IANA 时区的当前时间。
+- `get_current_time`：查询指定 IANA 时区的当前日期、时间、中文星期、ISO 星期序号和 UTC 偏移，避免模型自行推算星期。
 - `calculate`：加、减、乘、除基础计算。
 - `web_search`：返回可供 Agent 引用的标题、链接和摘要；配置 `TAVILY_API_KEY` 时使用 Tavily，未配置时按查询类型使用免密钥 RSS 搜索。
 - `get_weather`：通过 Open-Meteo 查询地点、当前天气及未来 1～7 天预报，无需 API Key。
