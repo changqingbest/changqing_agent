@@ -55,10 +55,13 @@ class OpenAICompatibleProvider:
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "tools": tools,
-            "tool_choice": "auto",
             "temperature": 0.4,
         }
+        # ReAct 文本模式会把动作目录注入系统上下文并传入空列表；此时不能继续发送
+        # tool_choice=auto，否则部分 OpenAI 兼容服务会因为没有 tools 而拒绝请求。
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
         if self.enable_search:
             payload["enable_search"] = True
             payload["search_options"] = {
@@ -82,9 +85,18 @@ class OpenAICompatibleProvider:
                 (item for item in reversed(messages) if item.get("role") == "user"),
                 {"content": "你好"},
             )
+            answer = f"演示模式已收到：{user_message['content']}\n\n配置 API Key 后会切换到真实模型。"
+            is_react = any(
+                item.get("role") == "system" and "【ReAct 输出协议】" in str(item.get("content", ""))
+                for item in messages
+            )
             reply = {
                 "role": "assistant",
-                "content": f"演示模式已收到：{user_message['content']}\n\n配置 API Key 后会切换到真实模型。",
+                "content": (
+                    f"Thought: 当前是演示模式，直接说明运行状态。\nAction: Finish[{answer}]"
+                    if is_react
+                    else answer
+                ),
             }
             log_event(
                 logger,
@@ -93,7 +105,7 @@ class OpenAICompatibleProvider:
                 "演示模式已生成本地回复",
                 model=self.model,
                 message_count=len(messages),
-                answer_chars=len(reply["content"]),
+                answer_chars=len(answer),
             )
             return reply
 

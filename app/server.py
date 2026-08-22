@@ -30,6 +30,7 @@ from app.logging_config import (
 from app.prompts import get_prompt_catalog
 from app.providers.openai_compatible import OpenAICompatibleProvider
 from app.ptc import PTCExecutor
+from app.prompt_manager import get_interpreter_catalog
 from app.store import ConversationStore
 from app.tools import create_default_registry
 
@@ -302,6 +303,13 @@ async def update_model_config(request: ModelConfigRequest) -> dict[str, Any]:
 @app.get("/api/prompt-templates")
 async def prompt_templates() -> dict[str, Any]:
     return get_prompt_catalog()
+
+
+# GET /api/interpreter-templates
+# 返回 ReAct 运行时可自动选择的解释器提示词；它们与前端输入框模板是两套独立目录。
+@app.get("/api/interpreter-templates")
+async def interpreter_templates() -> dict[str, Any]:
+    return get_interpreter_catalog()
 
 
 # GET /api/conversations

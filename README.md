@@ -37,7 +37,9 @@ app/
 ├── agent.py                         Agent Loop：模型、工具、结果的循环编排
 ├── config.py                        环境变量与端口配置
 ├── logging_config.py                结构化日志、滚动文件、上下文与敏感信息脱敏
+├── prompt_manager.py                运行时解释器模板选择与 ReAct 系统提示词管理
 ├── prompts.py                       内置提示词分类与模板目录
+├── react_protocol.py                Thought/Action/Observation 协议解析与动作映射
 ├── server.py                        FastAPI、REST、SSE 和静态网页
 ├── store.py                         JSON 会话存储
 ├── providers/openai_compatible.py   千问/OpenAI 兼容模型适配层
@@ -50,13 +52,27 @@ scripts/verify_model.py              真实模型与 PTC 验证脚本
 
 ## Agent Loop
 
-`AgentLoop.run()` 的最小流程：
+`AgentLoop.run()` 当前使用可观察的 ReAct 循环：
 
-1. 系统提示词和会话消息交给模型。
-2. 模型返回普通文本时，结束本轮。
-3. 模型返回工具调用时，交给工具层或 PTC 层执行。
-4. 执行结果作为 `tool` 消息返回模型，再进入下一步。
-5. 最多执行 8 步，避免无限循环。
+1. 根据最后一个用户问题自动选择通用、联网研究、编程诊断、数据计算、写作整理或部署运维解释器。
+2. 把解释器要求、当前时间、工具目录和 ReAct 协议注入系统上下文。
+3. 模型输出简短 `Thought` 和一个 `Action`，例如 `Search[关键词]` 或 `Calculate[{...}]`。
+4. 框架执行动作，把真实结果作为 `Observation` 加回上下文并进入下一步。
+5. 信息充分时模型输出 `Action: Finish[最终答案]`；最多执行 8 步，避免无限循环。
+
+示例：
+
+```text
+Thought: 需要搜索官方发布信息。
+Action: Search[华为最新手机型号及主要卖点]
+
+Observation (Search): {"results": [...]}
+
+Thought: 已获得足够的官方信息。
+Action: Finish[完整答案]
+```
+
+网页通过 SSE 把解释器、步骤、思考摘要、行动和观察收集在对应的模型回答卡片中；右上角“过程记录”按钮可展开或隐藏，默认收起。这里的 `Thought` 被限定为简短行动理由，不要求或展示模型的详细私有推理。旧 Provider 如果仍返回 OpenAI 原生 `tool_calls`，循环会走兼容路径并产生相同的观察事件。
 
 核心类没有依赖 FastAPI，可以独立用于 CLI、定时任务或其他服务。
 
@@ -150,10 +166,13 @@ logs/changqing-agent.jsonl.1
 
 模板数据由 `GET /api/prompt-templates` 提供；新增模板时编辑 `app/prompts.py` 即可，无需修改前端渲染逻辑。
 
+运行时解释器提示词由 `app/prompt_manager.py` 单独管理，不同问题会自动选择不同模板并注入 Agent 上下文。可通过 `GET /api/interpreter-templates` 查看当前解释器目录；它与上面的输入框模板互不影响。
+
 ## API
 
 - `GET /api/status`：运行模式、模型、PTC 状态和端口
 - `GET /api/prompt-templates`：提示词分类与模板目录
+- `GET /api/interpreter-templates`：ReAct 运行时解释器模板目录
 - `GET/POST /api/model-config`：读取或切换当前进程的模型配置；API Key 不回显、不落盘
 - `GET/POST /api/conversations`：列出或创建会话
 - `GET/DELETE /api/conversations/{id}`：读取或删除会话

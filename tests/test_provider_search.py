@@ -42,6 +42,18 @@ class ProviderNativeSearchTests(unittest.TestCase):
                 search_strategy="agent",
             )
 
+    def test_react_payload_omits_native_tool_fields_when_catalog_is_empty(self) -> None:
+        provider = OpenAICompatibleProvider(
+            api_key="test-key",
+            base_url="https://api.openai.com/v1",
+            model="test-model",
+        )
+
+        payload = provider._build_payload([{"role": "user", "content": "hello"}], [])
+
+        self.assertNotIn("tools", payload)
+        self.assertNotIn("tool_choice", payload)
+
 
 if __name__ == "__main__":
     unittest.main()

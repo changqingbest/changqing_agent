@@ -213,12 +213,40 @@ button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 3px
 .message.user .avatar { color: var(--inverse); background: transparent; }
 .message-body { min-width: 0; }
 .message-author { margin: 0 0 8px; color: currentColor; opacity: .62; font: 700 9px "IBM Plex Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
+.message-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 27px; margin: -4px 0 7px; }
+.message-heading .message-author { margin: 0; }
 .message-content { color: currentColor; font-size: 13px; line-height: 1.86; overflow-wrap: anywhere; }
 .message-content p { margin: 0 0 12px; }
 .message-content p:last-child { margin-bottom: 0; }
 .message-content code { padding: 2px 6px; border: 1px solid currentColor; color: inherit; background: var(--wash); font: 500 11px "IBM Plex Mono", monospace; }
 .message-content pre { overflow-x: auto; padding: 15px; border: 2px solid currentColor; background: var(--paper-soft); color: var(--ink); box-shadow: 3px 3px 0 currentColor; }
 .message-content pre code { padding: 0; border: 0; color: inherit; background: transparent; }
+
+.react-toggle { display: inline-flex; align-items: center; gap: 6px; min-height: 27px; padding: 0 7px 0 9px; border: 1px solid var(--ink); border-radius: 0; color: var(--ink); background: var(--panel); font: 700 8px "IBM Plex Mono", monospace; letter-spacing: .05em; cursor: pointer; box-shadow: 2px 2px 0 var(--wash-strong); transition: color .16s, background .16s, transform .16s, box-shadow .16s; }
+.react-toggle:hover, .react-toggle[aria-expanded="true"] { color: var(--inverse); background: var(--ink); transform: translate(-1px, -1px); box-shadow: 3px 3px 0 var(--wash-strong); }
+.react-toggle:focus-visible { outline-offset: 3px; }
+.react-toggle i { font-style: normal; font-size: 12px; line-height: 1; transition: transform .18s; }
+.react-toggle[aria-expanded="true"] i { transform: rotate(180deg); }
+.react-count { display: grid; place-items: center; min-width: 16px; height: 16px; padding: 0 3px; color: var(--inverse); background: var(--ink); font-size: 8px; }
+.react-toggle:hover .react-count, .react-toggle[aria-expanded="true"] .react-count { color: var(--ink); background: var(--panel); }
+.answer-content { min-height: 24px; }
+.answer-placeholder { color: var(--muted); font-family: "IBM Plex Mono", monospace; font-size: 10px; animation: ink-blink 1.15s steps(2, end) infinite; }
+.response-error .answer-content { padding-left: 10px; border-left: 4px solid var(--ink); }
+.react-trace { position: relative; margin: 15px 0 0; padding-top: 12px; overflow: hidden; border: 0; border-top: 1px solid color-mix(in srgb, var(--ink) 34%, transparent); color: var(--ink); background: transparent; box-shadow: none; animation: trace-reveal .22s cubic-bezier(.2,.9,.25,1.1) both; }
+.react-trace[hidden] { display: none; }
+.react-trace-head { display: flex; align-items: center; gap: 9px; min-height: 26px; padding: 0 4px 9px; border-bottom: 1px dashed color-mix(in srgb, var(--ink) 32%, transparent); background: transparent; }
+.react-trace-head span { padding: 2px 6px; color: var(--inverse); background: var(--ink); font: 800 8px "IBM Plex Mono", monospace; letter-spacing: .12em; }
+.react-trace-head strong { font-size: 10px; letter-spacing: .08em; }
+.react-trace-body:empty::after { content: "正在选择解释器…"; display: block; padding: 12px; color: var(--muted); font-size: 10px; }
+.react-step { padding: 8px 4px 5px; border-top: 1px dashed color-mix(in srgb, var(--ink) 28%, transparent); color: var(--muted); font: 800 9px "IBM Plex Mono", monospace; }
+.react-step:first-child { border-top: 0; }
+.react-row { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; padding: 8px 4px; border-top: 1px solid color-mix(in srgb, var(--ink) 16%, transparent); }
+.react-row.interpreter { background: transparent; }
+.react-icon { padding-top: 1px; font-size: 13px; text-align: center; }
+.react-row strong { display: block; margin-bottom: 3px; color: var(--muted); font: 800 8px "IBM Plex Mono", monospace; letter-spacing: .1em; }
+.react-row p { margin: 0; font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.react-row.observation p { max-height: 180px; overflow: auto; font-family: "IBM Plex Mono", monospace; font-size: 9px; white-space: normal; }
+.react-row.action { padding-left: 8px; border-left: 2px solid color-mix(in srgb, var(--ink) 72%, transparent); }
 
 .composer-wrap { position: relative; z-index: 5; width: min(880px, calc(100% - 42px)); margin: 0 auto; padding: 0 0 13px; }
 .activity { align-items: center; gap: 8px; width: max-content; min-height: 30px; margin: 0 0 8px 6px; padding: 0 10px; border: 2px solid var(--ink); color: var(--inverse); background: var(--ink); box-shadow: 3px 3px 0 var(--wash-strong); font: 600 9px "IBM Plex Mono", monospace; transform: rotate(-1deg); }
@@ -319,6 +347,7 @@ kbd { font: inherit; }
 @keyframes workspace-reveal { from { opacity: 0; clip-path: inset(0 100% 0 0); } to { opacity: 1; clip-path: inset(0); } }
 @keyframes title-impact { from { opacity: 0; transform: scale(1.08) rotate(-1deg); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes message-pop { from { opacity: 0; transform: translateY(12px) rotate(.8deg) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes trace-reveal { from { opacity: 0; transform: translateY(-7px); clip-path: inset(0 0 100%); } to { opacity: 1; transform: none; clip-path: inset(0); } }
 @keyframes ink-blink { 50% { opacity: .28; transform: scale(.72); } }
 @keyframes glyph-jump { 50% { transform: translateY(-5px) rotate(45deg); } }
 @keyframes logo-tick { 50% { transform: translateX(1px); } }
@@ -354,6 +383,7 @@ kbd { font: inherit; }
   .message-stream { width: calc(100% - 22px); padding-top: 24px; }
   .message { grid-template-columns: 33px minmax(0, 1fr); gap: 11px; padding: 14px; }
   .message.user { margin-left: 5%; }
+  .react-trace { margin-top: 12px; }
   .conversation::before { left: 7px; right: 7px; }
 }
 
@@ -362,6 +392,9 @@ kbd { font: inherit; }
   .template-panel { max-height: 68vh; padding: 13px; }
   .template-list { grid-template-columns: 1fr; }
   .avatar { width: 31px; height: 31px; }
+  .message-heading { gap: 7px; }
+  .react-toggle { padding-right: 6px; padding-left: 7px; }
+  .react-row { grid-template-columns: 20px minmax(0, 1fr); padding-right: 9px; padding-left: 9px; }
   .workspace::after { display: none; }
   .model-dialog { width: calc(100vw - 14px); max-height: calc(100dvh - 14px); }
   .model-dialog-head { padding: 15px 14px 12px; }

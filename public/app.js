@@ -260,6 +260,66 @@ function messageTemplate(message) {
   </article>`;
 }
 
+function reactTraceTemplate(traceId) {
+  return `<section class="react-trace" id="${traceId}" aria-label="ReAct 执行轨迹" hidden>
+    <div class="react-trace-head"><span>REACT LOOP</span><strong>执行轨迹</strong></div>
+    <div class="react-trace-body"></div>
+  </section>`;
+}
+
+function streamingAssistantTemplate(responseId, traceId) {
+  return `<article class="message assistant response-pending" id="${responseId}">
+    <div class="avatar">CQ</div>
+    <div class="message-body">
+      <div class="message-heading">
+        <div class="message-author">Changqing</div>
+        <button class="react-toggle" type="button" aria-expanded="false" aria-controls="${traceId}">
+          <span>过程记录</span><b class="react-count">0</b><i aria-hidden="true">⌄</i>
+        </button>
+      </div>
+      <div class="message-content answer-content" aria-live="polite">
+        <p class="answer-placeholder">模型正在组织回答…</p>
+      </div>
+      ${reactTraceTemplate(traceId)}
+    </div>
+  </article>`;
+}
+
+function setAssistantAnswer(responseId, value, isError = false) {
+  const response = document.getElementById(responseId);
+  if (!response) return;
+  response.classList.remove("response-pending");
+  response.classList.toggle("response-error", isError);
+  response.querySelector(".answer-content").innerHTML = renderText(value);
+}
+
+function appendReactEvent(traceId, event) {
+  const body = document.querySelector(`#${traceId} .react-trace-body`);
+  if (!body) return;
+  const toggle = document.querySelector(`[aria-controls="${traceId}"]`);
+  const currentCount = Number(toggle?.dataset.count || 0) + 1;
+  if (toggle) {
+    toggle.dataset.count = String(currentCount);
+    toggle.querySelector(".react-count").textContent = String(currentCount);
+  }
+  if (event.type === "step") {
+    body.insertAdjacentHTML("beforeend", `<div class="react-step">第 ${Number(event.value)} 步</div>`);
+    return;
+  }
+  const labels = {
+    interpreter: ["◈", "解释器"], thought: ["🧠", "思考"], action: ["🎬", "行动"], observation: ["👀", "观察"],
+  };
+  if (!labels[event.type]) return;
+  const [icon, label] = labels[event.type];
+  let value = event.value || "";
+  if (event.type === "interpreter") value = `${event.name} · ${event.description}`;
+  if (event.type === "action") value = event.name === "Finish" ? "Finish" : `${event.name}[${event.input || ""}]`;
+  body.insertAdjacentHTML("beforeend", `<div class="react-row ${event.type}">
+    <span class="react-icon" aria-hidden="true">${icon}</span>
+    <div><strong>${label}</strong><div>${renderText(String(value))}</div></div>
+  </div>`);
+}
+
 function renderMessages(conversation) {
   const messages = conversation?.messages || [];
   elements.welcome.hidden = messages.length > 0;
@@ -323,6 +383,10 @@ async function sendMessage(text) {
   resizeInput();
   elements.welcome.hidden = true;
   elements.stream.insertAdjacentHTML("beforeend", messageTemplate({ role: "user", content }));
+  const responseToken = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const responseId = `assistant-response-${responseToken}`;
+  const traceId = `react-trace-${responseToken}`;
+  elements.stream.insertAdjacentHTML("beforeend", streamingAssistantTemplate(responseId, traceId));
   elements.conversation.scrollTop = elements.conversation.scrollHeight;
   setBusy(true);
 
@@ -335,16 +399,18 @@ async function sendMessage(text) {
     if (!response.ok) throw new Error(`请求失败：${response.status}`);
 
     await consumeEvents(response, (event) => {
-      if (event.type === "status") setBusy(true, event.value === "thinking" ? "正在思考" : "正在处理工具结果");
+      if (event.type === "status") setBusy(true, event.value === "thinking" ? "正在思考" : "正在处理观察结果");
       if (event.type === "tool_start") setBusy(true, `正在调用 ${event.name}`);
-      if (event.type === "answer") elements.stream.insertAdjacentHTML("beforeend", messageTemplate({ role: "assistant", content: event.value }));
+      if (["interpreter", "step", "thought", "action", "observation"].includes(event.type)) appendReactEvent(traceId, event);
+      if (event.type === "answer") setAssistantAnswer(responseId, event.value);
       if (event.type === "error") throw new Error(event.value);
+      elements.conversation.scrollTop = elements.conversation.scrollHeight;
     });
     await refreshList();
     const current = state.conversations.find((item) => item.id === state.activeId);
     if (current) elements.title.textContent = current.title;
   } catch (error) {
-    elements.stream.insertAdjacentHTML("beforeend", messageTemplate({ role: "assistant", content: `运行失败：${error.message}` }));
+    setAssistantAnswer(responseId, `运行失败：${error.message}`, true);
   } finally {
     setBusy(false);
     elements.conversation.scrollTop = elements.conversation.scrollHeight;
@@ -413,6 +479,16 @@ elements.taskList.addEventListener("click", (event) => {
   if (item && !state.busy) selectConversation(item.dataset.id);
 });
 elements.form.addEventListener("submit", (event) => { event.preventDefault(); sendMessage(elements.input.value); });
+elements.stream.addEventListener("click", (event) => {
+  const toggle = event.target.closest(".react-toggle");
+  if (!toggle) return;
+  const trace = document.getElementById(toggle.getAttribute("aria-controls"));
+  if (!trace) return;
+  const willExpand = toggle.getAttribute("aria-expanded") !== "true";
+  toggle.setAttribute("aria-expanded", String(willExpand));
+  trace.hidden = !willExpand;
+  if (willExpand) requestAnimationFrame(() => trace.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+});
 elements.input.addEventListener("input", resizeInput);
 elements.input.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
